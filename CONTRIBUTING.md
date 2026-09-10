@@ -10,6 +10,15 @@ Thanks for your interest in Elastic Web.
 - **Do not invent the proprietary layer.** The Meta-Policy, Recipe Optimizer,
   automatic recipe learning, and proprietary ranking are explicitly out of
   scope. Do not implement them.
+- **This is a PUBLIC repository.** It defines *how Elastic-compatible systems
+  communicate and execute* — NOT *how Vedaxi learns to become better than
+  other Elastic implementations*. The proprietary adaptive-intelligence layer
+  (REUSE/ADAPT/EXPLORE/CHALLENGE logic, recipe generation/mutation/
+  generalization, meta-policy, staleness detection, failure/outcome learning,
+  intelligence-cost optimization, private training datasets) lives in the
+  separate PRIVATE repo `Vedaxi-Elastic-Web-Mastermind`. If a task requires
+  proprietary work, create a GitHub issue labeled `private-intelligence-required`
+  and stop that component. CI enforces this via `.github/workflows/boundary-check.yml`.
 - **Pin dependencies.** Record every dependency, its version, license, and
   purpose in `docs/DEPENDENCY-MATRIX.md`.
 - **Never commit secrets.** No API keys, tokens, or real credentials.

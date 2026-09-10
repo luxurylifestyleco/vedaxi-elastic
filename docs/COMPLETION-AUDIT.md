@@ -222,6 +222,6 @@ plug in a proprietary ranker and an automatic recipe compiler.
    points are exercised without crossing into the prohibited automatic
    recipe-mutation territory.
 5. **Event bus is in-memory** — telemetry is local-only by design. When the
-   higher layer needs cross-session or cross-tenant learning (currently
-   prohibited), the event bus must be persisted (the DB `execution_traces` /
+   higher layer needs cross-session or learning across tenants (currently
+   prohibited in this public repo), the event bus must be persisted (the DB `execution_traces` /
    `execution_steps` tables exist but are not yet wired to the runtime).
