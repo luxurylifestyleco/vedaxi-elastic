@@ -267,11 +267,15 @@ def main() -> None:
     try:
         import psycopg2
 
+        # Password is read from the environment only; never hardcoded. Local
+        # dev Postgres commonly uses trust/peer auth, so an unset
+        # PGVECTOR_PASSWORD falls back to an empty string.
+        pwd = os.environ.get("PGVECTOR_PASSWORD", "")
         conn = psycopg2.connect(
             host=os.environ.get("PGVECTOR_HOST", "localhost"),
             port=int(os.environ.get("PGVECTOR_PORT", "5432")),
             user=os.environ.get("PGVECTOR_USER", "postgres"),
-            password=os.environ.get("PGVECTOR_PASSWORD", "postgres"),
+            password=pwd,
             dbname=os.environ.get("PGVECTOR_DB", "elastic_web"),
         )
     except Exception as exc:  # noqa: BLE001

@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vedaxi-elastic"
+version = "0.1.0"
+description = "Intent-driven semantic presentation layer: intent IR, capability registry/retrieval, progressive disclosure, recipe execution, telemetry, and benchmarking."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Vedaxi / luxurylifestyleco" },
+]
+keywords = ["intent", "capability", "mcp", "recipe", "retrieval", "semantic", "benchmark"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "pydantic>=2",
+    "jsonschema>=4",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7",
+    "psycopg2-binary>=2.9",
+]
+bench = [
+    "psycopg2-binary>=2.9",
+]
+
+[project.urls]
+Homepage = "https://github.com/vedaxi/vedaxi-elastic"
+Documentation = "https://github.com/vedaxi/vedaxi-elastic/blob/main/README.md"
+
+[tool.setuptools]
+# NOTE: The Elastic Web packages are currently flat source modules wired
+# together at test time via each package's conftest.py (sys.path insertion),
+# not importable distribution packages. Packaging them as a wheel requires
+# adding __init__.py to each package directory and is tracked as a follow-up
+# in docs/PUBLICATION-READINESS.md. This pyproject declares the project
+# metadata and runtime dependencies so the public SDK can be packaged.
+packages = []
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "apps"]

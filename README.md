@@ -93,12 +93,12 @@ pip install pydantic pytest jsonschema
 
 ## Running the tests
 
-The full suite is **153 tests** across the five packages. Run everything from the repo root with the capability-registry package on the path (required by the demo-bank tests):
+The full suite is **309 tests** across the seven packages and two apps. Run everything from the repo root with the capability-registry package on the path (required by the demo-bank tests):
 
 ```bash
 cd C:/Users/m_jor/Documents/elastic-web
 PYTHONPATH="packages/capability-registry" .venv/Scripts/python.exe -m pytest -q
-# 153 passed
+# 309 passed
 ```
 
 Or run each package independently (each has its own `conftest.py` that wires up sibling imports):
@@ -107,8 +107,11 @@ Or run each package independently (each has its own `conftest.py` that wires up 
 .venv/Scripts/python.exe -m pytest packages/intent-ir -q            # 15 passed
 .venv/Scripts/python.exe -m pytest packages/capability-registry -q   # 29 passed
 .venv/Scripts/python.exe -m pytest packages/capability-retrieval -q  # 28 passed
-.venv/Scripts/python.exe -m pytest packages/elastic-bench -q         # 31 passed
+.venv/Scripts/python.exe -m pytest packages/elastic-bench -q         # 169 passed
+.venv/Scripts/python.exe -m pytest packages/recipe-schema -q        # 25 passed
+.venv/Scripts/python.exe -m pytest packages/telemetry -q            # 12 passed
 PYTHONPATH="packages/capability-registry" .venv/Scripts/python.exe -m pytest apps/demo-bank -q  # 13 passed
+PYTHONPATH="packages/capability-registry" .venv/Scripts/python.exe -m pytest apps/gateway -q    # 18 passed
 ```
 
 ## Running the benchmark

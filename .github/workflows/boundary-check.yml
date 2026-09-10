@@ -50,12 +50,15 @@ jobs:
           FAILED=0
           for pat in "${PATTERNS[@]}"; do
             # Exclude this workflow file itself (it legitimately contains the
-            # pattern strings) and git-ignored caches.
+            # pattern strings), the publication-readiness doc (which documents
+            # the prohibited patterns), and git-ignored caches.
             if grep -rIl --exclude-dir=.git --exclude-dir=.venv --exclude-dir=__pycache__ \
-                --exclude=boundary-check.yml "$pat" . 2>/dev/null | grep -q .; then
+                --exclude=boundary-check.yml --exclude=PUBLICATION-READINESS.md \
+                "$pat" . 2>/dev/null | grep -q .; then
               echo "::error::Prohibited pattern found: '$pat'"
               grep -rIl --exclude-dir=.git --exclude-dir=.venv --exclude-dir=__pycache__ \
-                --exclude=boundary-check.yml "$pat" . 2>/dev/null | head -5
+                --exclude=boundary-check.yml --exclude=PUBLICATION-READINESS.md \
+                "$pat" . 2>/dev/null | head -5
               FAILED=1
             fi
           done

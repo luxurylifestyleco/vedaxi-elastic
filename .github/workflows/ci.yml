@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Test suite (291 tests)
+    name: Test suite (309 tests)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
