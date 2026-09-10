@@ -1,43 +1,55 @@
-"""Control A — baseline agent (Phase 9) for Elastic Web.
+"""Baseline Agent (Phase 9, Control A) for Elastic Web.
 
 Control A is the conventional baseline: an agent that is handed the FULL
 list of every available capability description and must select and invoke
 the right one for a given :class:`~intent_ir.IntentIR`.
 
 Because no external LLM API is available in this environment, the agent is
-a deterministic, rule-based stand-in for an LLM. It:
+a deterministic, rule-based stand-in for an LLM. It uses the SAME shared
+"LLM" (``agent_common.llm_select``) and the SAME invocation logic
+(``agent_common.invoke``) as Control B — the ONLY difference is that
+Control A sees ALL capability descriptions, whereas Control B sees only the
+top-K retrieved ones. This keeps the benchmark apples-to-apples: the same
+model, the same capabilities, differing only in how much of the capability
+surface the model is shown.
 
-    1. receives the full capability list (all 63-64 descriptions),
-    2. scores each capability against the intent using keyword term
-       overlap (reusing the keyword-retrieval strategy logic conceptually),
-    3. selects the top-scoring capability,
-    4. invokes it against the demo-bank functions,
-    5. records honest metrics (token estimates, call counts, latency,
-       success, and an estimated model cost).
-
-This is CONTROL A: the agent is deliberately given access to ALL capability
-descriptions (no retrieval step). The benchmark is NOT tuned to make any
-control win — metrics are recorded honestly.
-
-The LLM model, prompt builder, and invocation logic are shared with
-Control B via :mod:`agent_common`; the metric fields and token/cost
-estimators are shared via :mod:`metrics`. The only difference from
-Control B is that this agent sees every capability instead of only the
-top-K retrieved ones.
+It records honest metrics (token estimates, call counts, latency, success,
+and an estimated model cost) identical to Control B.
 """
 
 from __future__ import annotations
 
+import os
+import sys
 import time
 from typing import Any, Dict, List, Optional
 
-from capability import Capability
-from intent_ir import IntentIR
+# ---------------------------------------------------------------------------
+# sys.path bootstrap so this package can import its sibling packages and the
+# demo-bank app directly (matches the conftest pattern used elsewhere).
+# ---------------------------------------------------------------------------
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))          # packages/elastic-bench
+_PACKAGES_DIR = os.path.dirname(_PKG_DIR)                       # packages
+_REPO_ROOT = os.path.dirname(_PACKAGES_DIR)                     # elastic-web
+_APP_DIR = os.path.join(_REPO_ROOT, "apps", "demo-bank")
 
-from agent_common import build_prompt, invoke, llm_select
-from metrics import estimate_tokens, finalize, new_metrics
+for _path in (
+    _PACKAGES_DIR,
+    os.path.join(_PACKAGES_DIR, "intent-ir"),
+    os.path.join(_PACKAGES_DIR, "capability-registry"),
+    os.path.join(_PACKAGES_DIR, "capability-retrieval"),
+    _APP_DIR,
+):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
-# The metric fields every run() result must contain (shared with Control B).
+from capability import Capability  # noqa: E402
+from intent_ir import IntentIR  # noqa: E402
+
+from agent_common import build_prompt, invoke, llm_select  # noqa: E402
+from metrics import estimate_tokens, finalize, new_metrics  # noqa: E402
+
+# The metric fields every run() result must contain (identical to Control B).
 METRIC_FIELDS = (
     "input_tokens",
     "output_tokens",
@@ -55,13 +67,30 @@ METRIC_FIELDS = (
 class BaselineAgent:
     """Deterministic rule-based stand-in for an LLM-driven baseline agent.
 
-    Given an :class:`IntentIR` and the full list of capability descriptions,
-    it scores every capability by keyword term overlap, selects the top one,
-    invokes the matching demo-bank function, and returns a metrics dict.
+    Given an :class:`IntentIR` and the FULL list of capability descriptions,
+    it uses the shared rule-based "LLM" to select the best capability, invokes
+    the matching demo-bank function, and returns a metrics dict. It sees ALL
+    capabilities (no retrieval step) — that is what distinguishes Control A
+    from Control B.
     """
 
-    def __init__(self, capabilities: List[Capability]) -> None:
+    def __init__(
+        self,
+        capabilities: Optional[List[Capability]] = None,
+        bank_module: Any = None,
+    ) -> None:
+        self._bank = bank_module
+        self._capabilities: Optional[List[Capability]] = None
+        if capabilities is not None:
+            self.set_capabilities(capabilities)
+
+    # -- configuration ---------------------------------------------------
+
+    def set_capabilities(self, capabilities: List[Capability]) -> None:
+        """Store the full capability list (the entire surface the LLM sees)."""
         self._capabilities = list(capabilities)
+
+    # -- main entry point ------------------------------------------------
 
     def run(
         self,
@@ -72,37 +101,36 @@ class BaselineAgent:
 
         Args:
             intent: The structured intent to satisfy.
-            capabilities: Optional full capability list override (defaults to
-                the agent's capabilities).
+            capabilities: The FULL list of capability descriptions. If
+                omitted, the list configured at construction is used.
 
         Returns:
             A dict with all :data:`METRIC_FIELDS` plus the selected
             capability, selection score, result, and any error.
         """
+        if capabilities is not None:
+            self.set_capabilities(capabilities)
+        if self._capabilities is None:
+            raise ValueError("no capabilities provided to the baseline agent")
+
         start = time.perf_counter()
         metrics = new_metrics()
 
-        caps = list(capabilities) if capabilities is not None else self._capabilities
-        if not caps:
-            metrics["success"] = False
-            metrics["error"] = "no capabilities provided to the baseline agent"
-            metrics["wall_clock_latency_ms"] = (time.perf_counter() - start) * 1000.0
-            return finalize(metrics)
-
-        # (1) The "LLM" reads the FULL capability list once and picks a tool.
-        #     Control A: no retrieval step — every description is in context.
-        prompt = build_prompt(intent, caps)
-        metrics["input_tokens"] = estimate_tokens(prompt)
+        # The "LLM" reads the full capability list once and picks a tool.
         metrics["llm_calls"] = 1
-        metrics["retrieval_calls"] = 0
+        metrics["retrieval_calls"] = 0  # Control A: full list is given, no retrieval.
         metrics["steps"] = 1
 
-        # (2) Select the best capability (same model as Control B).
-        cap = llm_select(intent, caps)
+        # Build the prompt from ALL capabilities (no retrieval).
+        prompt = build_prompt(intent, self._capabilities)
+        metrics["input_tokens"] = estimate_tokens(prompt)
+
+        # Select the best capability using the SAME shared LLM as Control B.
+        cap = llm_select(intent, self._capabilities)
         metrics["output_tokens"] = estimate_tokens(cap.id)
         metrics["steps"] += 1
 
-        # (3) Invoke against the demo-bank functions.
+        # Invoke the selected capability against the demo-bank functions.
         try:
             result = invoke(cap, intent)
             metrics["tool_calls"] = 1
@@ -111,7 +139,13 @@ class BaselineAgent:
         except Exception as exc:  # noqa: BLE001 - record any failure
             metrics["success"] = False
             metrics["error"] = str(exc)
+            result = None
 
         metrics["wall_clock_latency_ms"] = (time.perf_counter() - start) * 1000.0
+        metrics = finalize(metrics)
+
+        metrics["intent_id"] = intent.intent_id
         metrics["selected_capability"] = cap.id
-        return finalize(metrics)
+        metrics["result"] = result
+        metrics["error"] = metrics.get("error")
+        return metrics
