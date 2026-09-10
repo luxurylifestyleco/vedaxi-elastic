@@ -104,8 +104,15 @@ class PgvectorBenchmark:
     # -- JSONB fallback (SQL cosine over JSONB arrays) --------------------
 
     def jsonb_retrieve(self, intent: IntentIR, k: int = 5) -> List[str]:
-        """Retrieve via SQL cosine over JSONB-array embeddings."""
+        """Retrieve via SQL cosine over JSONB-array embeddings.
+
+        Only valid when the embedding column is JSONB (non-pgvector fallback).
+        If the column is a vector type, this path is skipped.
+        """
         if self._conn is None:
+            return []
+        # If pgvector is present, the column is vector type — JSONB path N/A.
+        if self._has_pgvector():
             return []
         q = _embed(_intent_text(intent), self._vocab)
         # Convert to a Postgres array literal: {0.0, 0.0, ...}
@@ -164,8 +171,8 @@ class PgvectorBenchmark:
             naive = self.naive_retrieve(intent, k)
             results["naive"]["latency_ms"].append((time.perf_counter() - t0) * 1000.0)
 
-            # JSONB.
-            if self._conn is not None:
+            # JSONB (only when the column is JSONB, i.e. no pgvector).
+            if self._conn is not None and not self._has_pgvector():
                 t0 = time.perf_counter()
                 jsonb = self.jsonb_retrieve(intent, k)
                 results["jsonb"]["latency_ms"].append((time.perf_counter() - t0) * 1000.0)
@@ -193,11 +200,13 @@ class PgvectorBenchmark:
             return
         cur = self._conn.cursor()
         cur.execute("TRUNCATE bench_capabilities RESTART IDENTITY CASCADE")
+        has_pgvector = self._has_pgvector()
+        cast = "::vector" if has_pgvector else "::jsonb"
         for cap in self._caps:
             emb = self._embeddings[cap.id]
             cur.execute(
-                "INSERT INTO bench_capabilities (name, description, category, embedding) "
-                "VALUES (%s, %s, %s, %s::jsonb)",
+                f"INSERT INTO bench_capabilities (name, description, category, embedding) "
+                f"VALUES (%s, %s, %s, %s{cast})",
                 (cap.id, cap.description, cap.domain, json.dumps(emb)),
             )
         self._conn.commit()
