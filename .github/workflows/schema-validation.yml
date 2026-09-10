@@ -1,0 +1,70 @@
+name: Schema Validation
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate JSON schemas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jsonschema pydantic
+
+      - name: Validate IntentIR schema is well-formed JSON
+        run: |
+          python - <<'EOF'
+          import json
+          import jsonschema
+
+          with open("packages/intent-ir/schema.json") as f:
+              schema = json.load(f)
+
+          # Confirm the schema itself is a valid JSON Schema draft 2020-12.
+          jsonschema.Draft202012Validator.check_schema(schema)
+          print("IntentIR schema.json is well-formed and a valid JSON Schema")
+
+          # Validate a minimal sample document against the schema.
+          sample = {
+              "intent_id": "ci-sample-0001",
+              "goal": "check account balance",
+              "domain": "banking",
+              "action": "query",
+              "object": "account_balance",
+              "constraints": [],
+              "context": {},
+              "desired_output": "current balance",
+              "authority": "user",
+              "disclosure": "public",
+              "success_conditions": [],
+              "confidence": 0.9,
+          }
+          jsonschema.validate(instance=sample, schema=schema)
+          print("Sample IntentIR document validates against schema.json")
+          EOF
+
+      - name: Validate recipe schema via Pydantic model
+        run: |
+          PYTHONPATH="packages/recipe-schema" python - <<'EOF'
+          from recipe import Recipe
+
+          # A minimal valid recipe exercises the Pydantic v2 model.
+          recipe = Recipe(
+              recipe_id="ci-sample-recipe",
+              intent_family="account_balance_query",
+              version="1.0.0",
+              steps=[],
+          )
+          print("Recipe Pydantic model constructs a valid recipe:", recipe.recipe_id)
+          EOF

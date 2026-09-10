@@ -1,0 +1,33 @@
+name: Benchmark Full
+
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    name: Full benchmark run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydantic pytest jsonschema psycopg2-binary
+
+      - name: Run ElasticBench full benchmark
+        run: |
+          python packages/elastic-bench/benchmark_runner.py
+
+      - name: Upload ElasticBench reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: elastic-bench-reports
+          path: packages/elastic-bench/reports/
+          if-no-files-found: warn
