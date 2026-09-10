@@ -22,6 +22,9 @@ integration method, and recommendation for each).
 | openai/openai-agents-python | MIT | Agent runtime reference |
 | openai/openai-agents-js | MIT | Agent runtime reference |
 | langchain-ai/langgraph | MIT | Workflow graph reference |
+| microsoft/agent-framework | MIT | Multi-agent orchestration reference |
+| crewAIInc/crewAI | MIT | Role-based multi-agent orchestration reference |
+| microsoft/autogen | MIT (code) | Multi-agent conversation framework reference |
 | aurelio-labs/semantic-router | MIT | Semantic routing reference |
 | brandonburrus/dynamic-discovery-mcp | MIT | Progressive disclosure reference |
 | microsoft/playwright-mcp | MIT | Browser fallback reference |

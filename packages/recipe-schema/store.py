@@ -129,6 +129,24 @@ class RecipeStore:
         """Return all versions of a recipe, in insertion order."""
         return list(self._recipes.get(recipe_id, {}).values())
 
+    def resolve(self, intent_family: str) -> Optional[Recipe]:
+        """Resolve the latest active recipe for an intent family.
+
+        Returns the most recently stored recipe whose ``intent_family``
+        matches and whose status is not ``RETIRED``, or ``None`` if no
+        matching recipe is stored.
+        """
+        best: Optional[Recipe] = None
+        for versions in self._recipes.values():
+            for recipe in versions.values():
+                if recipe.intent_family != intent_family:
+                    continue
+                if recipe.status == RecipeStatus.RETIRED:
+                    continue
+                if best is None or recipe.version > best.version:
+                    best = recipe
+        return best
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------

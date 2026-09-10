@@ -57,7 +57,7 @@
 - **Key dependencies:** Varies per server; mostly the TypeScript SDK.
 - **Integration method:** Reference source; run individual servers as subprocesses or adapt their patterns.
 - **Recommendation:** **REFERENCE** — do not install the whole monorepo. Study the `memory`, `fetch`, and `filesystem` servers as patterns for our capability servers.
-- **Overlaps:** Overlaps with both SDKs (1, 2); the `memory` server overlaps with mem0 (13).
+- **Overlaps:** Overlaps with both SDKs (1, 2); the `memory` server overlaps with mem0 (16).
 - **Security concerns:** Reference servers are not hardened for untrusted input; never expose them directly to untrusted clients.
 - **Maintenance/activity:** Very active (90k stars). Official project.
 
@@ -71,7 +71,7 @@
 - **Key dependencies:** `openai` client, `pydantic`, `httpx`.
 - **Integration method:** pip package; agent/tool/guardrail abstractions.
 - **Recommendation:** **DEFER** — not needed for capability retrieval/recipe execution. It is a competing agent-orchestration layer that overlaps with LangGraph (6) and the MCP adapter. Revisit only if we adopt OpenAI-native agent orchestration.
-- **Overlaps:** LangGraph (6), MCP SDKs (1, 2), browser-use (10).
+- **Overlaps:** LangGraph (6), MCP SDKs (1, 2), browser-use (13).
 - **Security concerns:** Tied to OpenAI API; vendor lock-in. Guardrails are a useful pattern to reference.
 - **Maintenance/activity:** Very active (29k stars, pushed 2026-09-09).
 
@@ -99,11 +99,53 @@
 - **Key dependencies:** `langchain-core`, `pydantic`, checkpoint backends (SQLite/Postgres).
 - **Integration method:** pip package; graph/state-machine orchestration.
 - **Recommendation:** **DEFER** — recipe execution here is a simple linear/conditional flow; a full graph framework is overkill. Reference its checkpointing pattern for durable recipe state.
-- **Overlaps:** OpenAI Agents (4, 5), DSPy (14), LlamaIndex (15).
+- **Overlaps:** OpenAI Agents (4, 5), DSPy (17), LlamaIndex (18).
 - **Security concerns:** Large dependency surface; pulls in langchain-core. Checkpoint stores need access control.
 - **Maintenance/activity:** Very active (41k stars, pushed 2026-09-09).
 
-## 7. aurelio-labs/semantic-router
+## 7. microsoft/agent-framework
+
+- **Repository:** https://github.com/microsoft/agent-framework
+- **Purpose:** Microsoft's framework for building, orchestrating, and deploying AI agents and multi-agent workflows (Python + .NET).
+- **License:** MIT.
+- **Latest stable:** `python-1.17.0` (2026-09-03); dotnet line at 1.20.0.
+- **Language:** Python, .NET.
+- **Key dependencies:** `openai`/provider clients, `pydantic`, workflow/durable-task runtimes.
+- **Integration method:** pip package; agent/workflow orchestration.
+- **Recommendation:** **DEFER** — a competing multi-agent orchestration layer. Recipe execution here is a simple linear/conditional flow; a full agent framework is overkill. Reference its durable-workflow and human-in-the-loop patterns if we later need long-running recipe state.
+- **Overlaps:** LangGraph (6), OpenAI Agents (4, 5), AutoGen (9), CrewAI (8).
+- **Security concerns:** Large dependency surface; third-party model/provider usage is at your own risk per Microsoft's terms. Durable-task runtimes need access control.
+- **Maintenance/activity:** Very active (13.3k stars, pushed 2026-09-03). Official Microsoft project.
+
+## 8. crewAIInc/crewAI
+
+- **Repository:** https://github.com/crewAIInc/crewAI
+- **Purpose:** Framework for orchestrating role-playing, autonomous AI agents that collaborate on complex tasks.
+- **License:** MIT.
+- **Latest stable:** 1.15.18 (2026-08).
+- **Language:** Python.
+- **Key dependencies:** `openai`/provider clients, `pydantic`, `litellm`, `crewai-tools`.
+- **Integration method:** pip package; role-based crew orchestration.
+- **Recommendation:** **DEFER** — role-playing multi-agent orchestration is not needed for capability retrieval or recipe execution. Reference its tool/agent abstraction patterns only.
+- **Overlaps:** LangGraph (6), OpenAI Agents (4, 5), AutoGen (9), Agent Framework (7).
+- **Security concerns:** Heavy dependency tree (litellm, many tools); role-based autonomy can amplify prompt-injection risk.
+- **Maintenance/activity:** Very active (58k stars, pushed 2026-08).
+
+## 9. microsoft/autogen
+
+- **Repository:** https://github.com/microsoft/autogen
+- **Purpose:** Programming framework for agentic AI — multi-agent conversation and workflow orchestration.
+- **License:** MIT (code, `LICENSE-CODE`); docs under CC-BY-4.0.
+- **Latest stable:** `python-v0.7.5` (2025-09-30).
+- **Language:** Python, .NET.
+- **Key dependencies:** `openai`/provider clients, `pydantic`, `aiohttp`.
+- **Integration method:** pip package; agent conversation/workflow orchestration.
+- **Recommendation:** **DEFER** — same reasoning as Agent Framework (7) and CrewAI (8): a competing orchestration layer not needed for the minimal dependency set. Reference its agent-conversation and tool-use patterns.
+- **Overlaps:** LangGraph (6), OpenAI Agents (4, 5), Agent Framework (7), CrewAI (8).
+- **Security concerns:** Multi-agent conversation can be exploited via prompt injection between agents; large dependency surface.
+- **Maintenance/activity:** Very active (60k stars). Official Microsoft project.
+
+## 10. aurelio-labs/semantic-router
 
 - **Repository:** https://github.com/aurelio-labs/semantic-router
 - **Purpose:** Superfast semantic routing / intent classification using embeddings instead of LLM calls — maps an utterance to a route/function.
@@ -113,11 +155,11 @@
 - **Key dependencies:** `numpy`, `nltk`, `scikit-learn`, optional `sentence-transformers` / `openai` embeddings.
 - **Integration method:** pip package; define routes with example utterances, route incoming intents to capabilities.
 - **Recommendation:** **USE** — this is the closest fit for **intent IR + capability retrieval (semantic)**. Lightweight, purpose-built, no LLM latency per call.
-- **Overlaps:** Capability retrieval overlaps with pgvector (11) / qdrant (12) vector search; intent routing overlaps with DSPy (14).
+- **Overlaps:** Capability retrieval overlaps with pgvector (14) / qdrant (15) vector search; intent routing overlaps with DSPy (17).
 - **Security concerns:** Embedding model choice affects routing accuracy; route definitions can be poisoned if user-controlled. Pin the embedding model.
 - **Maintenance/activity:** Active (3.9k stars, pushed 2026-08-24). Use stable v0.1.16, not the dev release.
 
-## 8. brandonburrus/dynamic-discovery-mcp
+## 11. brandonburrus/dynamic-discovery-mcp
 
 - **Repository:** https://github.com/brandonburrus/dynamic-discovery-mcp
 - **Purpose:** Context management for MCP enabling dynamic tool discovery — agents see a short catalog of tools and load full definitions on demand.
@@ -131,7 +173,7 @@
 - **Security concerns:** **No license** — cannot legally depend on it. Single maintainer, no release process.
 - **Maintenance/activity:** Low/early (0 stars, pushed 2026-08-12). Treat as a design reference only.
 
-## 9. microsoft/playwright-mcp
+## 12. microsoft/playwright-mcp
 
 - **Repository:** https://github.com/microsoft/playwright-mcp
 - **Purpose:** MCP server that exposes browser automation (Playwright) as MCP tools.
@@ -141,11 +183,11 @@
 - **Key dependencies:** `playwright`, `@modelcontextprotocol/sdk`.
 - **Integration method:** npm package / standalone MCP server; run as a subprocess and connect via MCP.
 - **Recommendation:** **USE** — the browser-automation capability server for the agentic web. Mature, Microsoft-maintained, exposes browser actions as MCP tools.
-- **Overlaps:** Browser automation overlaps with browser-use (10).
+- **Overlaps:** Browser automation overlaps with browser-use (13).
 - **Security concerns:** Browser automation is a high-risk capability — sandbox the browser, restrict navigation, validate URLs. Playwright is well-audited.
 - **Maintenance/activity:** Very active (37k stars, pushed 2026-09-09).
 
-## 10. browser-use/browser-use
+## 13. browser-use/browser-use
 
 - **Repository:** https://github.com/browser-use/browser-use
 - **Purpose:** LLM-driven browser agent that autonomously completes tasks in a real browser.
@@ -154,12 +196,12 @@
 - **Language:** Python (core in Rust).
 - **Key dependencies:** `playwright`, `langchain-core`, `pydantic`, LLM providers.
 - **Integration method:** pip package; autonomous agent loop.
-- **Recommendation:** **DEFER** — it is an *autonomous agent*, not a capability server. It overlaps with playwright-mcp (9) and the out-of-scope learning layer. Reference its browser-control patterns; use playwright-mcp for actual browser capability.
-- **Overlaps:** playwright-mcp (9), OpenAI Agents (4), LangGraph (6).
+- **Recommendation:** **DEFER** — it is an *autonomous agent*, not a capability server. It overlaps with playwright-mcp (12) and the out-of-scope learning layer. Reference its browser-control patterns; use playwright-mcp for actual browser capability.
+- **Overlaps:** playwright-mcp (12), OpenAI Agents (4), LangGraph (6).
 - **Security concerns:** Autonomous browsing is high-risk (prompt injection from page content, credential exposure). Heavy dependency tree (langchain-core).
 - **Maintenance/activity:** Very active (114k stars, pushed 2026-09-10).
 
-## 11. pgvector/pgvector
+## 14. pgvector/pgvector
 
 - **Repository:** https://github.com/pgvector/pgvector
 - **Purpose:** Open-source vector similarity search extension for PostgreSQL.
@@ -169,11 +211,11 @@
 - **Key dependencies:** PostgreSQL (>= 13).
 - **Integration method:** `CREATE EXTENSION vector`; SQL + client libs (psycopg, pgvector-python).
 - **Recommendation:** **USE** — the vector store for **capability retrieval (vector)**. Reuses an existing Postgres instance, so capability registry + recipes + vectors live in one database. Smallest-footprint vector option.
-- **Overlaps:** Vector search overlaps with qdrant (12).
+- **Overlaps:** Vector search overlaps with qdrant (15).
 - **Security concerns:** Requires Postgres hardening; HNSW index memory. No network-exposed service of its own.
 - **Maintenance/activity:** Very active (23k stars, pushed 2026-09-08).
 
-## 12. qdrant/qdrant
+## 15. qdrant/qdrant
 
 - **Repository:** https://github.com/qdrant/qdrant
 - **Purpose:** High-performance vector database and vector search engine.
@@ -182,12 +224,12 @@
 - **Language:** Rust.
 - **Key dependencies:** Standalone service; client SDKs (Python, JS).
 - **Integration method:** Run as a service (Docker/binary); connect via REST/gRPC client.
-- **Recommendation:** **DEFER** — choose **either** pgvector (11) **or** qdrant, not both. Qdrant is the better choice only if we need a dedicated, horizontally-scalable vector service without Postgres. For the smallest set, prefer pgvector.
-- **Overlaps:** pgvector (11).
+- **Recommendation:** **DEFER** — choose **either** pgvector (14) **or** qdrant, not both. Qdrant is the better choice only if we need a dedicated, horizontally-scalable vector service without Postgres. For the smallest set, prefer pgvector.
+- **Overlaps:** pgvector (14).
 - **Security concerns:** Network-exposed service — needs auth/TLS. Rust core is memory-safe.
 - **Maintenance/activity:** Very active (34k stars, pushed 2026-09-09).
 
-## 13. mem0ai/mem0
+## 16. mem0ai/mem0
 
 - **Repository:** https://github.com/mem0ai/mem0
 - **Purpose:** Memory layer for AI agents — persistent, self-updating memory across sessions.
@@ -197,11 +239,11 @@
 - **Key dependencies:** Vector store (qdrant/pgvector/etc.), LLM providers, `pydantic`.
 - **Integration method:** pip package; memory add/search APIs.
 - **Recommendation:** **DEFER** — memory/learning is part of the **out-of-scope** intelligence layer. Not needed for capability retrieval or recipe execution. Reference its memory-extraction pattern later.
-- **Overlaps:** Vector stores (11, 12), MCP `memory` server (3).
+- **Overlaps:** Vector stores (14, 15), MCP `memory` server (3).
 - **Security concerns:** Memory extraction can leak sensitive data; needs PII controls. Depends on an external vector store.
 - **Maintenance/activity:** Very active (65k stars, pushed 2026-09-09).
 
-## 14. stanfordnlp/dspy
+## 17. stanfordnlp/dspy
 
 - **Repository:** https://github.com/stanfordnlp/dspy
 - **Purpose:** Framework for programming (not prompting) LLMs — declarative modules, automatic prompt optimization, evaluation.
@@ -211,11 +253,11 @@
 - **Key dependencies:** `openai`/provider clients, `pydantic`, optional `litellm`.
 - **Integration method:** pip package; `dspy.Predict`/`dspy.ChainOfThought` modules, optimizers, evaluators.
 - **Recommendation:** **REFERENCE** — the **optimization/learning** part is out of scope. But its **evaluation/benchmarking** patterns (metrics, datasets, assertions) are directly useful for our **benchmarking** requirement. Study and reimplement the minimal eval harness; do not install the full framework.
-- **Overlaps:** LangGraph (6), LlamaIndex (15), OpenAI Agents (4).
+- **Overlaps:** LangGraph (6), LlamaIndex (18), OpenAI Agents (4).
 - **Security concerns:** Prompt-optimization can produce prompt-injection-prone prompts; eval harnesses must not execute untrusted code.
 - **Maintenance/activity:** Very active (38k stars, pushed 2026-09-09).
 
-## 15. run-llama/llama_index
+## 18. run-llama/llama_index
 
 - **Repository:** https://github.com/run-llama/llama_index
 - **Purpose:** Leading data framework for RAG — document ingestion, indexing, retrieval, agents.
@@ -225,11 +267,11 @@
 - **Key dependencies:** `pydantic`, `numpy`, provider clients, optional vector stores.
 - **Integration method:** pip package; `VectorStoreIndex`, retrievers, query engines.
 - **Recommendation:** **DEFER** — a large, general RAG framework. Our capability retrieval is narrower (registry + keyword + vector over a small schema) and is better served by pgvector + semantic-router directly. Reference its retrieval abstractions.
-- **Overlaps:** DSPy (14), LangGraph (6), vector stores (11, 12).
+- **Overlaps:** DSPy (17), LangGraph (6), vector stores (14, 15).
 - **Security concerns:** Large dependency surface; many optional integrations. Version churn is high.
 - **Maintenance/activity:** Very active (52k stars, pushed 2026-09-10).
 
-## 16. open-telemetry/opentelemetry-collector
+## 19. open-telemetry/opentelemetry-collector
 
 - **Repository:** https://github.com/open-telemetry/opentelemetry-collector
 - **Purpose:** Vendor-agnostic telemetry collector — receives, processes, and exports traces/metrics/logs.
@@ -239,11 +281,11 @@
 - **Key dependencies:** Standalone service; OTLP protocol; exporter plugins.
 - **Integration method:** Run as a service; instrument apps with OTel SDKs (Python/JS) that export OTLP to it.
 - **Recommendation:** **DEFER** — the full collector is heavy for a single service. For the smallest set, use the **OTel SDKs** (Python/JS) and export directly to a backend. Add the collector only when we have multiple services or need buffering/processing.
-- **Overlaps:** Telemetry overlaps with Phoenix (17) and Langfuse (18) as backends.
+- **Overlaps:** Telemetry overlaps with Phoenix (20) and Langfuse (21) as backends.
 - **Security concerns:** Collector is a network service — needs auth/TLS. OTLP endpoints can be abused if exposed.
 - **Maintenance/activity:** Very active (7.5k stars, pushed 2026-09-09). CNCF project.
 
-## 17. Arize-ai/phoenix
+## 20. Arize-ai/phoenix
 
 - **Repository:** https://github.com/Arize-ai/phoenix
 - **Purpose:** AI observability and evaluation platform — LLM tracing, evals, datasets.
@@ -252,12 +294,12 @@
 - **Language:** Python.
 - **Key dependencies:** `pandas`, `sqlalchemy`, `openinference`, vector store.
 - **Integration method:** pip package; self-hosted web UI + SDK.
-- **Recommendation:** **REFERENCE** — ELv2 license is a legal constraint for a product we may distribute. Study its eval/tracing patterns; prefer Langfuse (18) for an actual telemetry backend.
-- **Overlaps:** Langfuse (18), OTel collector (16).
+- **Recommendation:** **REFERENCE** — ELv2 license is a legal constraint for a product we may distribute. Study its eval/tracing patterns; prefer Langfuse (21) for an actual telemetry backend.
+- **Overlaps:** Langfuse (21), OTel collector (19).
 - **Security concerns:** ELv2 restricts managed-service use; self-hosted only. Heavy dependency tree.
 - **Maintenance/activity:** Very active (11k stars, pushed 2026-09-10).
 
-## 18. langfuse/langfuse
+## 21. langfuse/langfuse
 
 - **Repository:** https://github.com/langfuse/langfuse
 - **Purpose:** Open-source AI engineering platform — LLM tracing, evals, metrics, prompt management, datasets. Integrates with OpenTelemetry.
@@ -267,7 +309,7 @@
 - **Key dependencies:** Postgres, ClickHouse (for analytics), Redis; OTel integration.
 - **Integration method:** Self-hosted service (Docker) or Langfuse Cloud; SDKs (Python/JS) + OTel exporter.
 - **Recommendation:** **USE** — the telemetry + benchmarking backend. MIT core, actively maintained, OTel-native, includes evals and datasets for our **benchmarking** requirement. Self-host via Docker.
-- **Overlaps:** Phoenix (17), OTel collector (16).
+- **Overlaps:** Phoenix (20), OTel collector (19).
 - **Security concerns:** Self-hosted service needs auth; `ee/` code is not MIT — verify we only use core features. Postgres/ClickHouse/Redis footprint.
 - **Maintenance/activity:** Very active (34k stars, pushed 2026-09-10).
 
@@ -301,6 +343,9 @@ For an **intent-driven capability-retrieval + recipe-execution + benchmarking** 
 |---|---|
 | `openai-agents-python` / `openai-agents-js` | Vendor lock-in; competing orchestration layer; overlaps MCP + LangGraph. Not needed. |
 | `langgraph` | Full graph framework is overkill for linear recipe execution; heavy langchain-core dependency. |
+| `microsoft/agent-framework` | Competing multi-agent orchestration layer; overkill for linear recipe execution. |
+| `crewAI` | Role-playing multi-agent orchestration; not needed for capability retrieval/recipe execution. |
+| `microsoft/autogen` | Competing multi-agent orchestration layer; not needed for the minimal set. |
 | `llama_index` | Large general RAG framework; our retrieval is narrower and served by pgvector + semantic-router. |
 | `mem0` | Memory/learning is the out-of-scope intelligence layer. |
 | `dspy` | Optimization/learning is out of scope; use only its eval patterns as reference. |

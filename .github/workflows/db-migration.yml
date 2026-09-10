@@ -1,0 +1,47 @@
+name: DB Migration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  migrate:
+    name: Apply and verify initial schema
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elastic_web
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply initial migration
+        run: |
+          PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d elastic_web \
+            -v ON_ERROR_STOP=1 -f db/migrations/001_init.sql
+
+      - name: Verify all 8 tables exist
+        run: |
+          EXPECTED="capabilities intent_examples recipes recipe_versions execution_traces execution_steps evaluations benchmark_runs"
+          for t in $EXPECTED; do
+            COUNT=$(PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d elastic_web \
+              -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='$t';")
+            if [ "$COUNT" != "1" ]; then
+              echo "::error::Table '$t' not found after migration."
+              exit 1
+            fi
+            echo "Table '$t' present."
+          done
+          echo "All 8 tables verified."

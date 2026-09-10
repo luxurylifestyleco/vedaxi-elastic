@@ -1,0 +1,49 @@
+name: Dependency & License
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Dependency docs and secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify dependency and license docs exist and are non-empty
+        run: |
+          for f in THIRD_PARTY_NOTICES.md docs/DEPENDENCY-MATRIX.md; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Required file '$f' is missing."
+              exit 1
+            fi
+            if [ ! -s "$f" ]; then
+              echo "::error::Required file '$f' is empty."
+              exit 1
+            fi
+            echo "OK: $f present and non-empty ($(wc -l < "$f") lines)."
+          done
+
+      - name: Scan tracked files for committed secrets
+        run: |
+          # Scan all tracked files for common secret patterns, excluding the
+          # .env.example template (which legitimately contains placeholders).
+          FAILED=0
+          while IFS= read -r f; do
+            [ "$f" = ".env.example" ] && continue
+            if grep -qE \
+              '(AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|AIza[0-9A-Za-z_-]{20,}|password\s*[=:]\s*[^"'"'"'[:space:]]{6,}|secret\s*[=:]\s*[^"'"'"'[:space:]]{6,}|api[_-]?key\s*[=:]\s*[^"'"'"'[:space:]]{6,})' \
+              "$f"; then
+              echo "::error::Possible secret found in tracked file: $f"
+              FAILED=1
+            fi
+          done < <(git ls-files)
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Potential secrets committed to the repository. Remove them before merging."
+            exit 1
+          fi
+          echo "No obvious secrets found in tracked files."
