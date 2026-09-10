@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://elastic-web.dev/schemas/intent-ir.schema.json",
+  "title": "IntentIR",
+  "description": "Intent Intermediate Representation (Intent IR): a structured, schema-validated description of a user's intent that can be produced by a rule-based or LLM compiler and consumed by downstream capability routing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent_id",
+    "goal",
+    "domain",
+    "action",
+    "object",
+    "constraints",
+    "context",
+    "desired_output",
+    "authority",
+    "disclosure",
+    "success_conditions",
+    "confidence",
+    "metadata"
+  ],
+  "properties": {
+    "intent_id": {
+      "type": "string",
+      "description": "Stable unique identifier for this intent instance (e.g. a UUID or slug)."
+    },
+    "goal": {
+      "type": "string",
+      "description": "Canonical goal the user wants to achieve (e.g. retrieve_financial_document)."
+    },
+    "domain": {
+      "type": "string",
+      "description": "Functional domain the intent belongs to (e.g. banking, travel, email)."
+    },
+    "action": {
+      "type": "string",
+      "description": "Verb describing the operation (e.g. retrieve, create, update, delete)."
+    },
+    "object": {
+      "type": "string",
+      "description": "The entity the action applies to (e.g. account_statement, invoice, flight)."
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Structured constraints narrowing the intent (e.g. period, amount, filters).",
+      "additionalProperties": true
+    },
+    "context": {
+      "type": "object",
+      "description": "Ambient context (channel, session, locale, prior turns) that informs execution.",
+      "additionalProperties": true
+    },
+    "desired_output": {
+      "type": "string",
+      "description": "Requested output format or artifact (e.g. pdf, json, csv, text)."
+    },
+    "authority": {
+      "type": "object",
+      "description": "Authorization/entitlement requirements needed to execute the intent.",
+      "additionalProperties": true
+    },
+    "disclosure": {
+      "type": "object",
+      "description": "Data-disclosure and privacy requirements (what may be shared, with whom).",
+      "additionalProperties": true
+    },
+    "success_conditions": {
+      "type": "array",
+      "description": "Explicit conditions that must hold for the intent to be considered fulfilled.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Compiler confidence in the parsed intent, 0.0 (none) to 1.0 (certain).",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form metadata (compiler version, timestamps, provenance, etc.).",
+      "additionalProperties": true
+    }
+  }
+}
