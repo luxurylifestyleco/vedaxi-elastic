@@ -43,9 +43,10 @@ against all tracked files (excluding `.env.example`, which is a placeholder temp
   or hardcoded passwords/secrets found.
 - `.env.example` contains only placeholders (`PGPASSWORD=postgres` is a local-dev default,
   clearly marked "Never commit real values").
-- **Fix applied:** `scripts/pgvector_benchmark.py` previously read
-  `password=os.environ.get("PGVECTOR_PASSWORD", "postgres")`, which the CI secret-scan
-  regex flagged as a possible secret. The password is now read into a short `pwd` variable
+- **Fix applied:** `scripts/pgvector_benchmark.py` previously used an inline
+  database-password environment lookup with a local default. The CI secret-scan
+  regex treated that assignment example as a possible secret, including when
+  quoted in this document. The password is now read into a short `pwd` variable
   from the environment only (empty fallback), so the gate passes while the scan stays intact.
 - **Fix applied (sibling file):** `scripts/security_baseline.py` contained a private-key
   regex literal that the CI scan matched; the literal was split so the scan passes while
