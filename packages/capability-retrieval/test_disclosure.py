@@ -116,6 +116,25 @@ def test_measure_reports_chars_and_tokens():
     assert m["tokens"] == m["chars"] // 4
 
 
+def test_unicode_measurement_does_not_change_with_optional_serializer(monkeypatch):
+    import importlib
+    import json
+    import sys
+    from types import SimpleNamespace
+    import disclosure
+
+    expected_chars = len(r'{"name":"caf\u00e9"}')
+    expected = {"chars": expected_chars, "tokens": expected_chars // 4}
+    try:
+        with monkeypatch.context() as scoped:
+            scoped.setitem(sys.modules, "orjson", SimpleNamespace(
+                dumps=lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")))
+            importlib.reload(disclosure)
+            assert disclosure.measure({"name": "caf\u00e9"}) == expected
+    finally:
+        importlib.reload(disclosure)
+
+
 def test_level0_smaller_than_level1_smaller_than_level2(engine, sample_id):
     l0 = engine.measure_level0_entry(sample_id)
     l1 = engine.measure_level1(sample_id)
