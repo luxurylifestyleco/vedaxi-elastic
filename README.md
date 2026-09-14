@@ -1,5 +1,12 @@
 # Elastic Web
 
+![CI](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/ci.yml/badge.svg)
+![Schema Validation](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/schema-validation.yml/badge.svg)
+![Dependency & License](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/dependency-license.yml/badge.svg)
+![Integration](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/integration.yml/badge.svg)
+![DB Migration](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/db-migration.yml/badge.svg)
+![Boundary Check](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/boundary-check.yml/badge.svg)
+
 Repository stewardship: `luxurylifestyleco/vedaxi-elastic` is the canonical
 foundation. Its current GitHub visibility is private; documentation about an
 open-source foundation describes its intended boundary, not authorization to
