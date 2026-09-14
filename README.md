@@ -1,5 +1,11 @@
 # Elastic Web
 
+Repository stewardship: `luxurylifestyleco/vedaxi-elastic` is the canonical
+foundation. Its current GitHub visibility is private; documentation about an
+open-source foundation describes its intended boundary, not authorization to
+publish it. See [repository ownership](docs/REPOSITORY-OWNERSHIP.md) for contribution,
+shared-source parity and application deployment boundaries.
+
 **Elastic is NOT another MCP implementation.** It is an **intent-driven semantic presentation layer** that decides *what* to show and *how* to execute a user's intent. MCP (Model Context Protocol) is just one adapter among many that Elastic can use to reach a capability — it is not the thing Elastic is, and Elastic does not reimplement the protocol.
 
 The objective of Elastic is:

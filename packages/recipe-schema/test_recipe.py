@@ -128,6 +128,20 @@ def test_recipe_step_defines_all_expected_fields():
     assert fields == STEP_FIELDS
 
 
+def test_resolve_preserves_foundation_family_version_and_retirement_contract():
+    store = RecipeStore()
+    assert store.resolve("retrieve_financial_document") is None
+    older = _make_recipe("older", "1.0.0")
+    newer = _make_recipe("newer", "2.0.0")
+    retired = _make_recipe("retired", "3.0.0")
+    retired.status = RecipeStatus.RETIRED
+    store.create(newer)
+    store.create(older)  # Selection is version-based, not insertion recency.
+    store.create(retired)
+    assert store.resolve("retrieve_financial_document") is newer
+    assert store.resolve("different_family") is None
+
+
 def test_recipe_roundtrip():
     recipe = _make_recipe()
     dumped = recipe.model_dump()

@@ -132,9 +132,10 @@ class RecipeStore:
     def resolve(self, intent_family: str) -> Optional[Recipe]:
         """Resolve the latest active recipe for an intent family.
 
-        Returns the most recently stored recipe whose ``intent_family``
-        matches and whose status is not ``RETIRED``, or ``None`` if no
-        matching recipe is stored.
+        Returns the recipe with the greatest version string whose
+        ``intent_family`` matches and whose status is not ``RETIRED``, or
+        ``None`` if absent. Existing lexical version ordering is preserved;
+        this helper does not perform semantic-version parsing or promotion.
         """
         best: Optional[Recipe] = None
         for versions in self._recipes.values():
