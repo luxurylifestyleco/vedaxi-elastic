@@ -42,13 +42,14 @@ jobs:
               "domain": "banking",
               "action": "query",
               "object": "account_balance",
-              "constraints": [],
+              "constraints": {},
               "context": {},
               "desired_output": "current balance",
-              "authority": "user",
-              "disclosure": "public",
+              "authority": {},
+              "disclosure": {},
               "success_conditions": [],
               "confidence": 0.9,
+              "metadata": {},
           }
           jsonschema.validate(instance=sample, schema=schema)
           print("Sample IntentIR document validates against schema.json")
