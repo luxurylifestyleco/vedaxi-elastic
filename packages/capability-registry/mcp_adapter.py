@@ -154,10 +154,12 @@ class MCPAdapter:
 
         # The MCP SDK is importable but we have no live server connection
         # here. Attempt to read tools from a server's registered tool list if
-        # one is provided; otherwise return an empty list (caller falls back).
+        # one is provided; otherwise return None so the caller falls back to
+        # the offline demo registry (an empty result is not a discovery
+        # success — it would leave the adapter with zero capabilities).
         server = getattr(self, "_mcp_server", None)
         if server is None:
-            return []
+            return None
         tools = getattr(server, "list_tools", None)
         if callable(tools):
             return list(tools())

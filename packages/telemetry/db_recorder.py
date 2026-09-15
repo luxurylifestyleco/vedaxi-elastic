@@ -157,7 +157,7 @@ class DatabaseTelemetryRecorder:
         conn = sqlite3.connect(
             target_path,
             check_same_thread=False,
-            autocommit=True,
+            isolation_level=None,
         )
         conn.row_factory = sqlite3.Row
         with conn:
