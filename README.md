@@ -147,5 +147,6 @@ The three control agents live in `packages/elastic-bench/`. Each exposes a `run(
 
 Licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE).
 Copyright (c) 2026 Vedaxi / luxurylifestyleco. Built by Cody (Vedaxi) and contributors.
+Trademark policy: [TRADEMARKS.md](TRADEMARKS.md)
 
 Credits: [CREDITS.md](CREDITS.md) · Third-party dependencies: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
