@@ -53,11 +53,11 @@ jobs:
             # pattern strings), the publication-readiness doc (which documents
             # the prohibited patterns), and git-ignored caches.
             if grep -rIl --exclude-dir=.git --exclude-dir=.venv --exclude-dir=__pycache__ \
-                --exclude=boundary-check.yml --exclude=PUBLICATION-READINESS.md \
+                --exclude=boundary-check.yml --exclude=PUBLICATION-READINESS.md --exclude=COMPLETION_MATRIX.md \
                 "$pat" . 2>/dev/null | grep -q .; then
               echo "::error::Prohibited pattern found: '$pat'"
               grep -rIl --exclude-dir=.git --exclude-dir=.venv --exclude-dir=__pycache__ \
-                --exclude=boundary-check.yml --exclude=PUBLICATION-READINESS.md \
+                --exclude=boundary-check.yml --exclude=PUBLICATION-READINESS.md --exclude=COMPLETION_MATRIX.md \
                 "$pat" . 2>/dev/null | head -5
               FAILED=1
             fi

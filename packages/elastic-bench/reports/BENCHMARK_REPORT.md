@@ -1,6 +1,6 @@
 # ElasticBench V0 — Benchmark Report
 
-- **Generated:** 2026-09-11T03:59:00+0530
+- **Generated:** 2026-09-15T08:03:26+0530
 - **Tasks:** 128 synthetic IntentIR tasks
 - **Capabilities sampled:** 64 of 64 in the demo-bank manifest
 - **Domains covered:** 10
@@ -18,7 +18,7 @@
 |---|---|---|---|
 | Success rate | 100.0% | 100.0% | 4.7% |
 | Median total tokens | 1111 | 119 | 0 |
-| Median latency (ms) | 0.12 | 0.51 | 0.00 |
+| Median latency (ms) | 0.13 | 0.55 | 0.00 |
 | Cost / successful intent | $0.002248 | $0.000267 | $0.000000 |
 
 ### Per-control detail
@@ -30,7 +30,7 @@
 - Input tokens: median 1107, p95 1112
 - Output tokens: median 4, p95 6
 - Total tokens: median 1111, p95 1119
-- Latency: median 0.12 ms, p95 0.15 ms
+- Latency: median 0.13 ms, p95 0.15 ms
 - Total LLM calls: 128
 - Total tool calls: 128
 - Total retrieval calls: 0
@@ -45,7 +45,7 @@
 - Input tokens: median 114, p95 140
 - Output tokens: median 4, p95 6
 - Total tokens: median 119, p95 144
-- Latency: median 0.51 ms, p95 0.63 ms
+- Latency: median 0.55 ms, p95 0.58 ms
 - Total LLM calls: 128
 - Total tool calls: 128
 - Total retrieval calls: 128

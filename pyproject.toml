@@ -41,13 +41,28 @@ Homepage = "https://github.com/vedaxi/vedaxi-elastic"
 Documentation = "https://github.com/vedaxi/vedaxi-elastic/blob/main/README.md"
 
 [tool.setuptools]
-# NOTE: The Elastic Web packages are currently flat source modules wired
-# together at test time via each package's conftest.py (sys.path insertion),
-# not importable distribution packages. Packaging them as a wheel requires
-# adding __init__.py to each package directory and is tracked as a follow-up
-# in docs/PUBLICATION-READINESS.md. This pyproject declares the project
-# metadata and runtime dependencies so the public SDK can be packaged.
-packages = []
+packages = [
+    "intent_ir",
+    "capability_registry",
+    "capability_retrieval",
+    "recipe_schema",
+    "recipe_runtime",
+    "elastic_bench",
+    "telemetry",
+]
+
+[tool.setuptools.package-dir]
+"intent_ir" = "packages/intent-ir"
+"capability_registry" = "packages/capability-registry"
+"capability_retrieval" = "packages/capability-retrieval"
+"recipe_schema" = "packages/recipe-schema"
+"recipe_runtime" = "packages/recipe-runtime"
+"elastic_bench" = "packages/elastic-bench"
+"telemetry" = "packages/telemetry"
+
+[tool.setuptools.package-data]
+intent_ir = ["schema.json"]
+elastic_bench = ["reports/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages", "apps"]
