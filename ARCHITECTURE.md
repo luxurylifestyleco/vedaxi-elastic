@@ -6,6 +6,22 @@ The objective that shapes every design decision:
 
 > **Minimize intelligence cost per successful intent.**
 
+```mermaid
+flowchart TD
+  A[User intent] --> B[Intent IR]
+  B --> C[Capability registry]
+  C --> D[Capability retrieval]
+  D --> E[Progressive disclosure L0 to L2]
+  E --> F{Known procedure?}
+  F -->|yes| G[Recipe DAG]
+  F -->|no| H[Select capability]
+  G --> I[Executor]
+  H --> I
+  I --> J[Telemetry / evaluation]
+```
+
+Public packages only. Adaptive policy and recipe learning are not in this repository — see [docs/PUBLIC_PRIVATE_BOUNDARY.md](docs/PUBLIC_PRIVATE_BOUNDARY.md).
+
 ---
 
 ## Component overview

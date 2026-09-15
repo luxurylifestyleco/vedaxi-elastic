@@ -1,7 +1,7 @@
 # Elastic Web — Completion Audit
 
 Audit date: 2026-09-10
-Repo: `https://github.com/luxurylifestyleco/vedaxi-elastic` (PRIVATE)
+Repo: `https://github.com/luxurylifestyleco/vedaxi-elastic` (public foundation)
 Branch: `main` (5 atomic commits, pushed)
 
 This audit verifies every requirement from the original Foundation Build task

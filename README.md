@@ -1,152 +1,106 @@
-# Elastic Web
+# Vedaxi Elastic
 
-![CI](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/ci.yml/badge.svg)
-![Schema Validation](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/schema-validation.yml/badge.svg)
-![Dependency & License](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/dependency-license.yml/badge.svg)
-![Integration](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/integration.yml/badge.svg)
-![DB Migration](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/db-migration.yml/badge.svg)
-![Boundary Check](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/boundary-check.yml/badge.svg)
+[![CI](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/ci.yml/badge.svg)](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/ci.yml)
+[![Boundary Check](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/boundary-check.yml/badge.svg)](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/boundary-check.yml)
 
-Repository stewardship: `luxurylifestyleco/vedaxi-elastic` is the canonical
-foundation. Its current GitHub visibility is private; documentation about an
-open-source foundation describes its intended boundary, not authorization to
-publish it. See [repository ownership](docs/REPOSITORY-OWNERSHIP.md) for contribution,
-shared-source parity and application deployment boundaries.
+The web normally exposes pages and APIs. **Vedaxi Elastic exposes what a service can do.**
 
-**Elastic is NOT another MCP implementation.** It is an **intent-driven semantic presentation layer** that decides *what* to show and *how* to execute a user's intent. MCP (Model Context Protocol) is just one adapter among many that Elastic can use to reach a capability — it is not the thing Elastic is, and Elastic does not reimplement the protocol.
+This repository is the **open foundation** for making services intent-addressable and composable. It is a protocol and toolkit — not an application you install and run as a product.
 
-The objective of Elastic is:
-
-> **Minimize intelligence cost per successful intent.**
-
-That is the single metric the whole architecture is built around: for every user intent that is successfully fulfilled, spend the least possible amount of model inference (tokens, LLM calls, latency, and dollars). Elastic achieves this by structuring intent, retrieving only the capabilities it needs, disclosing capability detail progressively, and — where a procedure is already known — executing a pre-authored recipe with **zero** model calls.
-
----
-
-## What Elastic is
-
-Elastic is a layered system that turns a natural-language request into a successful, low-cost execution:
-
-1. **Intent IR** — a structured, schema-validated description of what the user wants (`goal`, `domain`, `action`, `object`, `desired_output`, `context`, `constraints`, and more).
-2. **Capability registry** — a declarative catalog of every operation a system can perform, plus an **MCP adapter** that normalizes MCP tools into the same capability model.
-3. **Capability retrieval** — keyword and vector strategies that surface only the top-K capabilities relevant to an intent, instead of handing a model the entire catalog.
-4. **Progressive disclosure** — capability detail is revealed in three levels (id → summary → full schema), so a model only pays for the detail it actually needs at each stage.
-5. **Recipes** — declarative, versioned execution plans that encode a known procedure (e.g. "check balance, then pay"). Executing a recipe requires **no model calls at all**.
-6. **Telemetry** — a local-only event bus and recorder that captures per-execution token, latency, and outcome data.
-7. **Benchmarking** — three control agents that measure the intelligence cost of each approach head-to-head.
-
-### What Elastic is NOT
-
-- **Not an MCP server or client.** Elastic does not implement the MCP protocol. It *uses* MCP as one adapter among many (REST, gRPC, tool, etc.) to reach capabilities.
-- **Not an agent framework.** It does not orchestrate autonomous multi-step LLM agents; it routes intents to capabilities and executes known procedures.
-- **Not a learning/optimization layer.** Automatic recipe creation, meta-policy, and recipe optimization are explicitly out of scope.
-
----
-
-## The three control agents and the benchmark
-
-The benchmark compares three ways of satisfying the same banking intents, all recording **identical** metric fields so results are directly comparable:
-
-| Control | Approach | Model calls | What the model sees |
-|---|---|---|---|
-| **A — Baseline** | The model is handed the **full** list of every capability description and must select and invoke the right one. | 1 LLM call | All capabilities |
-| **B — Retrieval** | Intent → capability retrieval (top-K) → the model sees **only** the top-K descriptions → select → invoke. | 1 LLM call | Top-K capabilities only |
-| **C — Recipe** | A hand-written recipe is looked up by intent family and its steps are executed directly against the demo bank. | **0 LLM calls** | Nothing (procedure is pre-encoded) |
-
-All three use the **same** deterministic rule-based "LLM" and the **same** demo-bank capabilities — the only difference is how much of the capability surface the model is shown, and whether a procedure is rediscovered or pre-encoded. This keeps the comparison apples-to-apples.
-
-Each run records: `input_tokens`, `output_tokens`, `total_tokens`, `llm_calls`, `tool_calls`, `retrieval_calls`, `steps`, `wall_clock_latency_ms`, `success`, and `estimated_model_cost`. Cost is estimated from fixed per-token rates (`MODEL_INPUT_RATE = 0.000002`, `MODEL_OUTPUT_RATE = 0.000008` USD/token) in `packages/elastic-bench/metrics.py`.
-
-The expected result: **Control C (recipe) minimizes intelligence cost per successful intent** — zero tokens, zero LLM calls, zero model cost — while Control A pays the most because it must read the entire capability catalog on every intent.
-
----
-
-## Repository layout
+A **capability** describes one useful operation a service can perform.
+A **recipe** describes how capabilities compose to accomplish an intent.
+An **intent** describes what the user is trying to do — not which endpoint, page, or tool they should invoke.
 
 ```
-elastic-web/
-├── apps/demo-bank/            # Mock banking backend + capability manifest (64 caps, 10 domains)
-├── packages/
-│   ├── intent-ir/             # IntentIR model, JSON schema, rule-based compiler
-│   ├── capability-registry/   # Capability model, registry, seed data, MCP adapter
-│   ├── capability-retrieval/  # Keyword/vector/semantic-router retrievers, progressive disclosure
-│   ├── recipe-schema/         # Recipe + RecipeStep models, RecipeStore (storage + execution)
-│   ├── telemetry/             # EventBus + TelemetryRecorder (local-only)
-│   └── elastic-bench/         # Control A/B/C agents, shared metrics, benchmark harness
-├── docs/                      # Architecture, intent IR, capabilities, recipes, benchmarking, dependency matrix
-├── db/                        # Postgres/pgvector schema (migrations, seed)
-├── adapters/                  # api / browser / mcp adapter scaffolding
-├── recipes/                   # Recipe storage (examples, public)
-└── tests/                     # (empty; tests live alongside each package)
+User intent: "Find me a hotel in Dubai"
+        ↓
+   Intent IR   (structured goal / domain / action / object / constraints)
+        ↓
+ Capability retrieval   (only the relevant operations, not the whole catalog)
+        ↓
+ Selected capability or recipe
+        ↓
+ Execution
+        ↓
+ Result + telemetry
 ```
+
+Instead of handing an agent every tool schema on every request, Elastic retrieves the capabilities relevant to the current intent and **progressively discloses** more detail only when needed.
+
+---
+
+## Start here
+
+| I want to… | Go here |
+|---|---|
+| Run something in five minutes | [docs/QUICKSTART.md](docs/QUICKSTART.md) |
+| Understand the ideas | [docs/CONCEPTS.md](docs/CONCEPTS.md) |
+| Create a capability | [docs/CAPABILITIES.md](docs/CAPABILITIES.md) |
+| Create a recipe | [docs/RECIPE_AUTHORING.md](docs/RECIPE_AUTHORING.md) |
+| Connect an existing API | [docs/INTEGRATION_GUIDE.md](docs/INTEGRATION_GUIDE.md) |
+| See how the pieces fit | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Reproduce the benchmark | [docs/TESTING_AND_BENCHMARKS.md](docs/TESTING_AND_BENCHMARKS.md) |
+| Know what is *not* in this repo | [docs/PUBLIC_PRIVATE_BOUNDARY.md](docs/PUBLIC_PRIVATE_BOUNDARY.md) |
+
+Runnable examples live in [`examples/`](examples/README.md).
+
+---
+
+## What this repo contains
+
+| Package | What it is |
+|---|---|
+| `packages/intent-ir/` | `IntentIR` model, JSON Schema, rule-based compiler |
+| `packages/capability-registry/` | `Capability` model, in-memory registry, demo-bank seed, MCP adapter |
+| `packages/capability-retrieval/` | Keyword / vector retrievers and L0/L1/L2 progressive disclosure |
+| `packages/recipe-schema/` | `Recipe` / `RecipeStep` models and `RecipeStore` (storage + DAG execution) |
+| `packages/recipe-runtime/` | Thin runner wrapper over the store |
+| `packages/telemetry/` | Local event bus + in-memory / SQLite / Postgres recorders |
+| `packages/elastic-bench/` | Three control agents (full catalog / retrieval / recipe) and the benchmark harness |
+| `apps/demo-bank/` | Mock banking backend the examples and Control C execute against |
+| `apps/gateway/` | Small HTTP gateway used by `examples/04_full_gateway_roundtrip.py` |
+
+Automatic recipe learning, adaptive execution policy, and related intelligence are **not** in this repository. See [PUBLIC_PRIVATE_BOUNDARY.md](docs/PUBLIC_PRIVATE_BOUNDARY.md).
 
 ---
 
 ## Setup
 
-The repo uses a Python virtual environment. The venv already exists at `.venv/` (Python 3.12) with the runtime dependencies installed: **pydantic**, **pytest**, and **jsonschema**.
+Python 3.11+ recommended. Packages are imported from source (they are not published to PyPI).
 
 ```bash
-cd C:/Users/m_jor/Documents/elastic-web
-
-# Create the venv (if it does not already exist)
+git clone https://github.com/luxurylifestyleco/vedaxi-elastic.git
+cd vedaxi-elastic
 python -m venv .venv
-
-# Activate it
-#   Windows (git-bash / cmd):
-source .venv/Scripts/activate
-#   macOS / Linux:
-source .venv/bin/activate
-
-# Install the runtime dependencies
+# Windows:  .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 pip install pydantic pytest jsonschema
 ```
 
-> Note: the packages are not installed as a distribution. Each package's `conftest.py` adds its sibling package directories to `sys.path` so tests can import them directly. The demo-bank app's tests additionally need the `capability-registry` package on the path (see below).
-
-## Running the tests
-
-The full suite is **309 tests** across the seven packages and two apps. Run everything from the repo root with the capability-registry package on the path (required by the demo-bank tests):
-
-```bash
-cd C:/Users/m_jor/Documents/elastic-web
-PYTHONPATH="packages/capability-registry" .venv/Scripts/python.exe -m pytest -q
-# 309 passed
-```
-
-Or run each package independently (each has its own `conftest.py` that wires up sibling imports):
-
-```bash
-.venv/Scripts/python.exe -m pytest packages/intent-ir -q            # 15 passed
-.venv/Scripts/python.exe -m pytest packages/capability-registry -q   # 29 passed
-.venv/Scripts/python.exe -m pytest packages/capability-retrieval -q  # 28 passed
-.venv/Scripts/python.exe -m pytest packages/elastic-bench -q         # 169 passed
-.venv/Scripts/python.exe -m pytest packages/recipe-schema -q        # 25 passed
-.venv/Scripts/python.exe -m pytest packages/telemetry -q            # 12 passed
-PYTHONPATH="packages/capability-registry" .venv/Scripts/python.exe -m pytest apps/demo-bank -q  # 13 passed
-PYTHONPATH="packages/capability-registry" .venv/Scripts/python.exe -m pytest apps/gateway -q    # 18 passed
-```
-
-## Running the benchmark
-
-The three control agents live in `packages/elastic-bench/`. Each exposes a `run(intent)` entry point that returns a metrics dict. See [docs/BENCHMARKING.md](docs/BENCHMARKING.md) for the full methodology and how to run the comparison.
+Tests add sibling package directories to `sys.path` via each package's `conftest.py`. Demo-bank tests also need `packages/capability-registry` on `PYTHONPATH`.
 
 ---
 
-## Documentation
+## Tests and examples
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — how the pieces fit together and the data flow from intent to execution.
-- [docs/INTENT-IR.md](docs/INTENT-IR.md) — the intent intermediate representation.
-- [docs/CAPABILITIES.md](docs/CAPABILITIES.md) — the capability model, registry, manifest, and MCP adapter.
-- [docs/RECIPES.md](docs/RECIPES.md) — the recipe schema, store, and the three hand-written recipes.
-- [docs/BENCHMARKING.md](docs/BENCHMARKING.md) — the benchmark methodology and cost model.
-- [docs/DEPENDENCY-MATRIX.md](docs/DEPENDENCY-MATRIX.md) — upstream dependency audit and licensing.
-- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — third-party dependencies and licenses.
+From the repository root:
 
-## License
+```bash
+python -m pytest packages/ -q
+python examples/01_compile_intent.py
+python examples/02_retrieve_capabilities.py
+python examples/03_execute_recipe.py
+python examples/04_full_gateway_roundtrip.py
+```
 
-Licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE).
-Copyright (c) 2026 Vedaxi / luxurylifestyleco. Built by Cody (Vedaxi) and contributors.
-Trademark policy: [TRADEMARKS.md](TRADEMARKS.md)
+See [docs/TESTING_AND_BENCHMARKS.md](docs/TESTING_AND_BENCHMARKS.md) for the three-control benchmark (Controls A, B, C) and how to interpret results. The benchmark does **not** claim universal superiority — it measures intelligence cost on a fixed demo-bank intent set.
 
-Credits: [CREDITS.md](CREDITS.md) · Third-party dependencies: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+---
+
+## License and trademarks
+
+Source code is licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE).
+
+The Vedaxi name, logos, and branding are **not** licensed under Apache 2.0. See [TRADEMARKS.md](TRADEMARKS.md).
+
+Credits: [CREDITS.md](CREDITS.md) · Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

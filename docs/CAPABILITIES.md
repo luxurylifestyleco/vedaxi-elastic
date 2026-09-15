@@ -2,6 +2,34 @@
 
 A **capability** is a declarative description of an operation a system can perform on behalf of a user. It is the unit of discovery and routing in Elastic: an intent compiler produces an `IntentIR`, and capability routing matches it against registered capabilities. Capabilities are the surface that retrieval, progressive disclosure, and recipes all operate on.
 
+You do not need to describe your entire application. Describe the useful things your service can do.
+
+## Build your first capability
+
+```python
+import sys
+sys.path.insert(0, "packages/capability-registry")
+from capability import Capability
+from registry import CapabilityRegistry
+
+cap = Capability(
+    id="search_hotels",
+    name="Search hotels",
+    description="Find hotels in a city for given stay dates.",
+    domain="travel",
+    inputs={"city": "string", "check_in": "date", "check_out": "date"},
+    outputs={"hotels": "list"},
+    provider="demo",
+    protocol="rest",
+    endpoint="GET /hotels",
+)
+reg = CapabilityRegistry()
+reg.register(cap)
+assert reg.get_by_id("search_hotels").id == "search_hotels"
+```
+
+`extra="forbid"` rejects unknown fields. Real examples: `apps/demo-bank/manifest.py`. To wire an existing API, see [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md). Progressive disclosure (L0/L1/L2): `packages/capability-retrieval/disclosure.py` and [CONCEPTS.md](CONCEPTS.md).
+
 ## Files
 
 | File | Purpose |
