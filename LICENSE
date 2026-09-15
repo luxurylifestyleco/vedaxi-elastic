@@ -1,16 +1,50 @@
-MIT License
+Vedaxi Elastic Web — Elastic Public License, Version 2 (EGPL2)
 
-Copyright (c) 2026 Vedaxi / luxurylifestyleco
+Copyright (c) 2026 Vedaxi / luxurylifestyleco. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software and its source code are made publicly available under the
+Elastic Public License, Version 2 (EGPL2), as published by Vedaxi at
+https://vedaxi.com/licenses/egpl-2.0 (the "License"). You may not use this
+file except in compliance with the License.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. GRANT
+
+Subject to the terms below, Vedaxi grants you a worldwide, royalty-free,
+non-exclusive, non-sublicensable license to use, reproduce, modify, and
+redistribute this software, in source or binary form.
+
+2. CREDITS AND ATTRIBUTION (Mandatory)
+
+Any redistribution, in whole or in part, of this software or of a derivative
+work, in source or binary form, MUST retain and display all of the following,
+unmodified and in a prominent location (README, About dialog, or equivalent
+documentation):
+
+   a. "Built on Vedaxi Elastic Web by Vedaxi / luxurylifestyleco."
+   b. A hyperlink to https://github.com/luxurylifestyleco/vedaxi-elastic-web
+      (the canonical source repository).
+
+You may NOT remove, obscure, or alter the credits above. Derivative works must
+carry attribution no less prominent than attribution given to the derivative
+author's own contribution.
+
+3. DERIVATIVE WORKS
+
+Derivative works must be licensed under EGPL2, carry the copyright notice and
+attribution required by Section 2, and state significant changes made to the
+original. Files you did not modify remain under Section 1 as originally
+delivered.
+
+4. PROPRIETARY CORE EXCLUSION
+
+This license covers THIS repository only. The Vedaxi adaptive-intelligence
+layer (recipes, meta-policy, adaptive learning, and related proprietary
+components) is NOT licensed under EGPL2 or any open license, remains the
+exclusive property of Vedaxi / luxurylifestyleco, and may not be copied,
+extracted, reimplemented, or distributed except as expressly authorized in
+writing.
+
+5. NO WARRANTY
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -19,3 +53,29 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+6. TERMINATION
+
+Your rights under this license terminate automatically if you fail to comply
+with Section 2 (attribution) or Section 4 (proprietary exclusion). Upon
+notification of termination from Vedaxi, you must cease distribution and
+destroy all copies in your possession.
+
+7. PATENT GRANT
+
+Subject to compliance with this license, Vedaxi grants you a non-exclusive,
+worldwide, royalty-free patent license to make, use, sell, and distribute the
+Software, to the extent covered by patents Vedaxi owns that are necessarily
+infringed by the unmodified Software.
+
+---
+
+Credits
+-------
+Project lead and principal architect: Cody (Vedaxi / luxurylifestyleco)
+Runtime infrastructure: Syed Hasan (Vedaxi)
+Adaptive-intelligence architecture and research grounding: the Vedaxi
+engineering system (Hermes orchestration — Mario/Sentinel/Sonny profiles,
+IDA control plane).
+
+Full authorship history: `git log --format="%an <%ae>" | sort -u`.
