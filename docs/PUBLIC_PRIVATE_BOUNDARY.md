@@ -17,14 +17,13 @@ It is Apache-2.0 licensed source for intent IR, capabilities, retrieval, progres
 
 ## What is not in this repository
 
-A separate **private** codebase holds Vedaxi's adaptive-intelligence layer. This public repo's `boundary-check.yml` CI job **fails the build** if proprietary markers appear (for example `packages/adaptive-recipe`, `meta_policy`, `RecipeCandidateCompiler`, and related names). That job is the enforcement mechanism.
+A separate **private** codebase holds Vedaxi's adaptive-intelligence layer. CI on this repository includes a **boundary check** that fails the build if proprietary-intelligence source markers appear in the public tree. That job is the enforcement mechanism.
 
 Do not expect documentation or code here for:
 
 - Proprietary adaptive execution policy
-- Internal EXPLORE / REUSE / ADAPT / CHALLENGE decision engines
-- Meta-policy implementation
-- Recipe *learning* / self-improvement algorithms
+- Internal mode-selection / self-improvement engines (not shipped here)
+- Recipe *learning* algorithms
 - Private scoring, model routing, or causal-learning machinery
 - Hosted production control plane internals
 
