@@ -145,8 +145,7 @@ The three control agents live in `packages/elastic-bench/`. Each exposes a `run(
 
 ## License
 
-Licensed under the **Elastic Public License, Version 2 (EGPL2)** — see [LICENSE](LICENSE).
-Attribution is mandatory: redistributions must retain the "Built on Vedaxi Elastic Web" credits (§2).
-The proprietary adaptive-intelligence core is excluded from this license (§4).
+Licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE).
+Copyright (c) 2026 Vedaxi / luxurylifestyleco. Built by Cody (Vedaxi) and contributors.
 
 Credits: [CREDITS.md](CREDITS.md) · Third-party dependencies: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
