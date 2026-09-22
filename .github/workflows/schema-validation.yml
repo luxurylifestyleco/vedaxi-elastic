@@ -20,7 +20,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install jsonschema pydantic
+          pip install jsonschema pydantic pytest
+
+      - name: Verify bounded decision state
+        run: python -m pytest packages/intent-ir/test_decision_state.py -q
 
       - name: Validate IntentIR schema is well-formed JSON
         run: |
