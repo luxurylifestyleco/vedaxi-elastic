@@ -1,0 +1,861 @@
+{
+  "$defs": {
+    "AcceptanceResult": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "test_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Test Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "evaluator": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Evaluator",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "test_id",
+        "status",
+        "evaluator",
+        "evidence_refs"
+      ],
+      "title": "AcceptanceResult",
+      "type": "object"
+    },
+    "AcceptanceTest": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "test_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Test Id",
+          "type": "string"
+        },
+        "evaluator": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Evaluator",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^(|/.*)$",
+          "title": "Target",
+          "type": "string"
+        },
+        "expected": {
+          "$ref": "#/$defs/JsonValue"
+        }
+      },
+      "required": [
+        "test_id",
+        "evaluator",
+        "target",
+        "expected"
+      ],
+      "title": "AcceptanceTest",
+      "type": "object"
+    },
+    "ApprovalPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "each_action",
+            "bounded_grant"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "approver": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Approver",
+          "type": "string"
+        },
+        "required_for": {
+          "items": {
+            "enum": [
+              "external_write",
+              "disclosure",
+              "payment",
+              "privilege_change"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Required For",
+          "type": "array"
+        }
+      },
+      "required": [
+        "mode",
+        "approver",
+        "required_for"
+      ],
+      "title": "ApprovalPolicy",
+      "type": "object"
+    },
+    "AssuranceIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "intent_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "goal": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Goal",
+          "type": "string"
+        },
+        "desired_end_state": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "minProperties": 1,
+          "title": "Desired End State",
+          "type": "object"
+        },
+        "constraints": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Constraints",
+          "type": "object"
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget"
+        },
+        "max_risk": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Max Risk",
+          "type": "string"
+        },
+        "approval_policy": {
+          "$ref": "#/$defs/ApprovalPolicy"
+        },
+        "acceptance_tests": {
+          "items": {
+            "$ref": "#/$defs/AcceptanceTest"
+          },
+          "minItems": 1,
+          "title": "Acceptance Tests",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intent_id",
+        "goal",
+        "desired_end_state",
+        "budget",
+        "max_risk",
+        "approval_policy",
+        "acceptance_tests"
+      ],
+      "title": "AssuranceIntent",
+      "type": "object"
+    },
+    "Budget": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "max_cost": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Cost"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "max_duration_ms": {
+          "exclusiveMinimum": 0,
+          "title": "Max Duration Ms",
+          "type": "integer"
+        },
+        "max_tool_calls": {
+          "minimum": 0,
+          "title": "Max Tool Calls",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_duration_ms",
+        "max_tool_calls"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "CapabilityTrustClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "capability_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_version": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Capability Version",
+          "type": "string"
+        },
+        "publisher": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Publisher",
+          "type": "string"
+        },
+        "issuer": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Issuer",
+          "type": "string"
+        },
+        "claim": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Claim",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "subject_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Subject Sha256",
+          "type": "string"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "signature_ref": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Signature Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capability_id",
+        "capability_version",
+        "publisher",
+        "issuer",
+        "claim",
+        "evidence_refs",
+        "subject_sha256",
+        "issued_at",
+        "expires_at",
+        "signature_ref"
+      ],
+      "title": "CapabilityTrustClaim",
+      "type": "object"
+    },
+    "EvidenceReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "receipt_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "intent_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "execution_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Execution Id",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Step Id",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "output_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Output Sha256",
+          "type": "string"
+        },
+        "checkpoint_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Checkpoint Sha256",
+          "type": "string"
+        },
+        "issuer": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Issuer",
+          "type": "string"
+        },
+        "recorded_at": {
+          "format": "date-time",
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "acceptance_results": {
+          "items": {
+            "$ref": "#/$defs/AcceptanceResult"
+          },
+          "minItems": 1,
+          "title": "Acceptance Results",
+          "type": "array"
+        },
+        "source_refs": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "signature_ref": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signature Ref"
+        },
+        "verification_scope": {
+          "default": "internal",
+          "enum": [
+            "internal",
+            "provider_receipt",
+            "independent"
+          ],
+          "title": "Verification Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "intent_id",
+        "execution_id",
+        "step_id",
+        "input_sha256",
+        "output_sha256",
+        "checkpoint_sha256",
+        "issuer",
+        "recorded_at",
+        "status",
+        "acceptance_results",
+        "source_refs"
+      ],
+      "title": "EvidenceReceipt",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "PermissionGrant": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "grant_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Grant Id",
+          "type": "string"
+        },
+        "intent_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "principal": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Principal",
+          "type": "string"
+        },
+        "issuer": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Issuer",
+          "type": "string"
+        },
+        "capability_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_version": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Capability Version",
+          "type": "string"
+        },
+        "action": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Action",
+          "type": "string"
+        },
+        "resource": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Resource",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "approval_receipt_ref": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Approval Receipt Ref",
+          "type": "string"
+        },
+        "signature_ref": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Signature Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "grant_id",
+        "intent_id",
+        "principal",
+        "issuer",
+        "capability_id",
+        "capability_version",
+        "action",
+        "resource",
+        "input_sha256",
+        "budget",
+        "issued_at",
+        "expires_at",
+        "approval_receipt_ref",
+        "signature_ref"
+      ],
+      "title": "PermissionGrant",
+      "type": "object"
+    },
+    "PermissionReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "receipt_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "grant_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Grant Id",
+          "type": "string"
+        },
+        "intent_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Step Id",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "policy_version": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "evaluator": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Evaluator",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "signature_ref": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Signature Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "grant_id",
+        "intent_id",
+        "step_id",
+        "request_sha256",
+        "decision",
+        "reason",
+        "policy_version",
+        "evaluator",
+        "evaluated_at",
+        "evidence_refs",
+        "signature_ref"
+      ],
+      "title": "PermissionReceipt",
+      "type": "object"
+    },
+    "StepCheckpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "execution_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Execution Id",
+          "type": "string"
+        },
+        "intent_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Step Id",
+          "type": "string"
+        },
+        "capability_id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "capability_version": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Capability Version",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "prepared",
+            "started",
+            "completed",
+            "failed",
+            "indeterminate"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "attempt": {
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "recorded_at": {
+          "format": "date-time",
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "permission_receipt_ref": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Permission Receipt Ref",
+          "type": "string"
+        },
+        "prior_checkpoint_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prior Checkpoint Sha256"
+        },
+        "output_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Sha256"
+        },
+        "evidence_receipt_ref": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Receipt Ref"
+        }
+      },
+      "required": [
+        "execution_id",
+        "intent_id",
+        "step_id",
+        "capability_id",
+        "capability_version",
+        "idempotency_key",
+        "input_sha256",
+        "state",
+        "attempt",
+        "recorded_at",
+        "permission_receipt_ref"
+      ],
+      "title": "StepCheckpoint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Schema-generation envelope: one explicitly named contract per document.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "document": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssuranceIntent"
+        },
+        {
+          "$ref": "#/$defs/CapabilityTrustClaim"
+        },
+        {
+          "$ref": "#/$defs/PermissionGrant"
+        },
+        {
+          "$ref": "#/$defs/PermissionReceipt"
+        },
+        {
+          "$ref": "#/$defs/StepCheckpoint"
+        },
+        {
+          "$ref": "#/$defs/EvidenceReceipt"
+        }
+      ],
+      "title": "Document"
+    }
+  },
+  "required": [
+    "document"
+  ],
+  "title": "AssuranceDocument",
+  "type": "object"
+}
