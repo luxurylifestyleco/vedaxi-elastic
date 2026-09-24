@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Intent-driven semantic presentation layer: intent IR, capability registry/retrieval, progressive disclosure, recipe execution, telemetry, and benchmarking."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [
     { name = "Vedaxi / luxurylifestyleco" },
 ]
@@ -16,7 +16,7 @@ keywords = ["intent", "capability", "mcp", "recipe", "retrieval", "semantic", "b
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
