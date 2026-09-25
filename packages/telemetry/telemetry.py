@@ -66,6 +66,7 @@ class TelemetryRecord(BaseModel):
     capability_ids: List[str] = Field(default_factory=list)
     model: Optional[str] = None
     provider: Optional[str] = None
+    protocol_metadata: Dict[str, Any] = Field(default_factory=dict)
     tokens: Dict[str, Any] = Field(default_factory=dict)
     latency: Optional[float] = None
     tool_calls: List[ToolCall] = Field(default_factory=list)
@@ -150,6 +151,9 @@ class TelemetryRecorder:
 
     def _apply(self, event: ExecutionEvent, record: TelemetryRecord) -> None:
         payload = event.payload or {}
+        protocol = payload.get("protocol")
+        if isinstance(protocol, dict):
+            record.protocol_metadata.update(protocol)
 
         if event.event_type == EventType.INTENT_RECEIVED:
             if event.intent_id:

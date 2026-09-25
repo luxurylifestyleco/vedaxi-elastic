@@ -31,9 +31,10 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from capability import Capability
+from remote_mcp import RemoteMCPClient
 
 # Default provider/protocol/domain applied to normalized capabilities.
 DEFAULT_PROVIDER = "mcp"
@@ -93,14 +94,20 @@ class MCPAdapter:
     def __init__(
         self,
         tool_registry: Optional[Sequence[Any]] = None,
+        remote_client: Optional[RemoteMCPClient] = None,
+        allow_demo_fixtures: bool = True,
         provider: str = DEFAULT_PROVIDER,
         protocol: str = DEFAULT_PROTOCOL,
         domain: str = DEFAULT_DOMAIN,
     ) -> None:
+        if tool_registry is not None and remote_client is not None:
+            raise ValueError("choose a local tool registry or a remote MCP client")
         self.provider = provider
         self.protocol = protocol
         self.domain = domain
         self._tool_registry = tool_registry
+        self.remote_client = remote_client
+        self.allow_demo_fixtures = allow_demo_fixtures
         self._tools: Dict[str, Any] = {}
         self._capabilities: Dict[str, Capability] = {}
         self._execution_log: List[ExecutionResult] = []
@@ -117,9 +124,9 @@ class MCPAdapter:
             The list of discovered capabilities (also cached internally).
         """
         tools = self._resolve_tools()
-        self._tools = {tool.name: tool for tool in tools}
+        self._tools = {self._value(tool, "name"): tool for tool in tools}
         self._capabilities = {
-            tool.name: self._normalize(tool) for tool in tools
+            name: self._normalize(tool) for name, tool in self._tools.items()
         }
         self._discovered = True
         return self.list_capabilities()
@@ -127,19 +134,22 @@ class MCPAdapter:
     def _resolve_tools(self) -> List[Any]:
         """Return the tool objects to discover from.
 
-        Priority: explicit registry > MCP SDK (if importable) > demo registry.
+        Demo tools are fixtures and require explicit opt-in.
         """
         if self._tool_registry is not None:
             return list(self._tool_registry)
 
-        sdk_tools = self._discover_from_mcp_sdk()
-        if sdk_tools is not None:
-            return sdk_tools
+        if self.remote_client is not None:
+            return self.remote_client.list_tools()
 
-        # Fall back to the local demo registry so the adapter works offline.
-        from demo_mcp_tools import get_demo_tools
+        if self.allow_demo_fixtures:
+            from demo_mcp_tools import get_demo_tools
 
-        return get_demo_tools()
+            return get_demo_tools()
+
+        raise RuntimeError(
+            "no MCP source configured; demo fixtures require allow_demo_fixtures=True"
+        )
 
     def _discover_from_mcp_sdk(self) -> Optional[List[Any]]:
         """Try to discover tools from the MCP SDK, if importable.
@@ -180,28 +190,43 @@ class MCPAdapter:
             tool.name            -> Capability.name (humanized)
             tool.callable        -> Capability.endpoint (tool reference)
         """
-        name = getattr(tool, "name", None) or ""
-        description = getattr(tool, "description", None) or ""
-        input_schema = getattr(tool, "input_schema", None) or {}
-        output_schema = getattr(tool, "output_schema", None) or {}
+        name = self._value(tool, "name") or ""
+        description = self._value(tool, "description") or name
+        input_schema = self._value(tool, "inputSchema", "input_schema") or {}
+        output_schema = self._value(tool, "outputSchema", "output_schema") or {}
+        remote = self.remote_client is not None
+        endpoint = self.remote_client.endpoint if remote else name
 
         return Capability(
             id=name,
-            name=self._humanize(name),
+            name=self._value(tool, "title") or self._humanize(name),
             description=description,
             domain=self.domain,
             inputs=self._schema_to_inputs(input_schema),
             outputs=self._schema_to_outputs(output_schema),
             provider=self.provider,
             protocol=self.protocol,
-            endpoint=name,  # tool reference used to invoke
+            endpoint=endpoint,
             metadata={
-                "source": "mcp",
+                "source": "remote-mcp" if remote else "mcp-fixture",
+                "source_endpoint": endpoint,
                 "tool_name": name,
                 "input_schema": input_schema,
                 "output_schema": output_schema,
+                "annotations": self._value(tool, "annotations") or {},
+                "demo": bool(self.allow_demo_fixtures and not remote),
             },
         )
+
+    @staticmethod
+    def _value(tool: Any, *names: str) -> Any:
+        for name in names:
+            if isinstance(tool, Mapping) and name in tool:
+                return tool[name]
+            value = getattr(tool, name, None)
+            if value is not None:
+                return value
+        return None
 
     @staticmethod
     def _humanize(name: str) -> str:
@@ -257,20 +282,15 @@ class MCPAdapter:
         if tool is None:
             raise KeyError(f"tool not discovered: {tool_name}")
 
-        callable_fn = getattr(tool, "callable", None)
-        if callable_fn is None:
-            result = ExecutionResult(
-                tool_name=tool_name,
-                capability_id=tool_name,
-                success=False,
-                error="tool has no callable",
-            )
-            self._execution_log.append(result)
-            return result
-
         start = time.perf_counter()
         try:
-            value = callable_fn(**(arguments or {}))
+            if self.remote_client is not None:
+                value = self.remote_client.call_tool(tool_name, arguments or {})
+            else:
+                callable_fn = self._value(tool, "callable")
+                if callable_fn is None:
+                    raise RuntimeError("tool has no callable")
+                value = callable_fn(**(arguments or {}))
             success = True
             error = None
         except Exception as exc:  # noqa: BLE001 - record any failure
@@ -289,6 +309,20 @@ class MCPAdapter:
         )
         self._execution_log.append(result)
         return result
+
+    def register(self, registry: Any) -> List[Capability]:
+        """Discover once and add the canonical capabilities to a registry."""
+        capabilities = self.discover()
+        for capability in capabilities:
+            registry.register(capability)
+        return capabilities
+
+    def executor(self, capability_id: str, arguments: Dict[str, Any]) -> Any:
+        """Recipe-runtime executor; remote failures never use demo tools."""
+        result = self.invoke(capability_id, arguments)
+        if not result.success:
+            raise RuntimeError(result.error)
+        return result.result
 
     # ------------------------------------------------------------------
     # Queries

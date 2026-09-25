@@ -44,6 +44,7 @@ Documentation = "https://github.com/vedaxi/vedaxi-elastic/blob/main/README.md"
 packages = [
     "intent_ir",
     "capability_registry",
+    "capability_projection",
     "capability_retrieval",
     "recipe_schema",
     "recipe_runtime",
@@ -54,6 +55,7 @@ packages = [
 [tool.setuptools.package-dir]
 "intent_ir" = "packages/intent-ir"
 "capability_registry" = "packages/capability-registry"
+"capability_projection" = "packages/capability-projection"
 "capability_retrieval" = "packages/capability-retrieval"
 "recipe_schema" = "packages/recipe-schema"
 "recipe_runtime" = "packages/recipe-runtime"

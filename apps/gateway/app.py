@@ -43,8 +43,10 @@ for _dir in (
     _PACKAGES_DIR,
     os.path.join(_PACKAGES_DIR, "intent-ir"),
     os.path.join(_PACKAGES_DIR, "capability-registry"),
+    os.path.join(_PACKAGES_DIR, "capability-projection"),
     os.path.join(_PACKAGES_DIR, "capability-retrieval"),
     os.path.join(_PACKAGES_DIR, "recipe-schema"),
+    os.path.join(_PACKAGES_DIR, "recipe-runtime"),
     os.path.join(_APPS_DIR, "demo-bank"),
 ):
     if _dir not in sys.path:
@@ -54,12 +56,21 @@ for _dir in (
 # Package imports (after sys.path bootstrap).
 # ---------------------------------------------------------------------------
 import bank  # noqa: E402
+from a2a import A2AInboundAdapter  # noqa: E402
 from capability import Capability  # noqa: E402
 from compiler import RuleBasedCompiler  # noqa: E402
+from discovery import (  # noqa: E402
+    agent_card,
+    agents_json,
+    agents_txt,
+    ucp_profile,
+)
 from factory import build_retriever  # noqa: E402
 from intent_ir import IntentIR  # noqa: E402
 from manifest import build_manifest  # noqa: E402
 from recipe import Recipe, RecipeStep  # noqa: E402
+from projection import to_mcp_tool  # noqa: E402
+from runner import RecipeDAGRunner  # noqa: E402
 from store import RecipeStore  # noqa: E402
 from telemetry import EventBus, TelemetryRecorder  # noqa: E402
 
@@ -72,6 +83,7 @@ _RETRIEVER = build_retriever("keyword", _MANIFEST)
 _BUS = EventBus()
 _RECORDER = TelemetryRecorder(_BUS)
 _RECIPE_STORE = RecipeStore(bus=_BUS)
+_RUNNER = RecipeDAGRunner(bus=_BUS)
 
 
 def _capability_by_id(capability_id: str) -> Optional[Capability]:
@@ -88,6 +100,70 @@ def _bank_executor(capability_id: str, args: Dict[str, Any]) -> Any:
     if fn is None or not callable(fn):
         raise KeyError(f"no bank function for capability {capability_id!r}")
     return fn(**args)
+
+
+def _public_base_url() -> str:
+    return os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+
+def _execute_through_runtime(
+    capability_id: str,
+    args: Dict[str, Any],
+    *,
+    source_protocol: str,
+    source_endpoint: str,
+) -> Tuple[int, Dict[str, Any]]:
+    capability = _capability_by_id(capability_id)
+    if capability is None:
+        return 404, {"error": f"capability not found: {capability_id}"}
+    trace_id = uuid.uuid4().hex
+    protocol = {
+        "source_protocol": source_protocol,
+        "source_endpoint": source_endpoint,
+        "provider": capability.provider,
+        "selected_capability": capability.id,
+    }
+    _BUS.emit(
+        "capability.selected",
+        trace_id=trace_id,
+        payload={"capability_id": capability.id, "protocol": protocol},
+    )
+    recipe = Recipe(
+        recipe_id=f"{source_protocol}-{trace_id}",
+        intent_family="direct_capability_execution",
+        version="1.0.0",
+        steps=[
+            RecipeStep(
+                step_id="execute",
+                action="execute",
+                capability_id=capability.id,
+                args=args,
+            )
+        ],
+        success_conditions=["capability execution completed"],
+    )
+    execution = _RUNNER.run(
+        recipe,
+        executor=_bank_executor,
+        trace_id=trace_id,
+        raise_on_error=False,
+    )
+    if not execution.success:
+        status = 400 if (execution.error or "").startswith("TypeError:") else 500
+        return status, {"error": execution.error, "trace_id": trace_id}
+    _BUS.emit(
+        "outcome.delivered",
+        trace_id=trace_id,
+        payload={
+            "protocol": {**protocol, "execution_outcome": "succeeded"},
+            "evidence_id": trace_id,
+        },
+    )
+    return 200, {
+        "capability_id": capability.id,
+        "trace_id": trace_id,
+        "result": execution.results["execute"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -138,16 +214,12 @@ def _handle_capability_execute(
     args = body.get("args", {})
     if not isinstance(args, dict):
         return 400, {"error": "'args' must be an object"}
-    fn = getattr(bank, capability_id, None)
-    if fn is None or not callable(fn):
-        return 500, {"error": f"no callable bank function for {capability_id!r}"}
-    try:
-        result = fn(**args)
-    except TypeError as exc:
-        return 400, {"error": f"invalid arguments: {exc}"}
-    except Exception as exc:  # noqa: BLE001 - surface any execution failure
-        return 500, {"error": f"{type(exc).__name__}: {exc}"}
-    return 200, {"capability_id": capability_id, "result": result}
+    return _execute_through_runtime(
+        capability_id,
+        args,
+        source_protocol="http",
+        source_endpoint=f"{_public_base_url()}/capabilities/{capability_id}/execute",
+    )
 
 
 def _handle_recipes_resolve(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
@@ -199,10 +271,115 @@ def _handle_health() -> Tuple[int, Dict[str, Any]]:
     return 200, {"status": "ok"}
 
 
+def _handle_agent_card() -> Tuple[int, Dict[str, Any]]:
+    return 200, agent_card(_MANIFEST, _public_base_url())
+
+
+def _handle_agents_json() -> Tuple[int, Dict[str, Any]]:
+    return 200, agents_json(
+        _MANIFEST, _public_base_url(), os.environ.get("WEBMCP_URL")
+    )
+
+
+def _handle_agents_txt() -> Tuple[int, str]:
+    return 200, agents_txt(
+        _MANIFEST, _public_base_url(), os.environ.get("WEBMCP_URL")
+    )
+
+
+def _handle_ucp_profile() -> Tuple[int, Dict[str, Any]]:
+    profile = ucp_profile(_MANIFEST, _public_base_url())
+    if not profile["capabilities"]:
+        return 404, {"error": "UCP commerce is not enabled"}
+    return 200, profile
+
+
+def _handle_a2a_message(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    adapter = A2AInboundAdapter(
+        compiler=_COMPILER,
+        retriever=_RETRIEVER,
+        capability_by_id=_capability_by_id,
+        runner=_RUNNER,
+        executor=_bank_executor,
+        bus=_BUS,
+        source_endpoint=f"{_public_base_url()}/message:send",
+    )
+    response = adapter.handle(body)
+    state = response["task"]["status"]["state"]
+    return (200 if state == "TASK_STATE_COMPLETED" else 422), response
+
+
+def _handle_mcp(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    request_id = body.get("id")
+    method = body.get("method")
+    if body.get("jsonrpc") != "2.0" or not isinstance(method, str):
+        return 400, {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": -32600, "message": "Invalid Request"},
+        }
+    if method == "initialize":
+        result = {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {"tools": {"listChanged": False}},
+            "serverInfo": {"name": "vedaxi-elastic", "version": "0.1.0"},
+        }
+    elif method == "notifications/initialized":
+        result = {}
+    elif method == "tools/list":
+        result = {"tools": [to_mcp_tool(capability) for capability in _MANIFEST]}
+    elif method == "tools/call":
+        params = body.get("params")
+        if not isinstance(params, dict) or not isinstance(params.get("name"), str):
+            return 400, {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32602, "message": "Invalid params"},
+            }
+        arguments = params.get("arguments", {})
+        if not isinstance(arguments, dict):
+            return 400, {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32602, "message": "arguments must be an object"},
+            }
+        status, payload = _execute_through_runtime(
+            params["name"],
+            arguments,
+            source_protocol="mcp",
+            source_endpoint=f"{_public_base_url()}/mcp",
+        )
+        result = (
+            {
+                "content": [{"type": "text", "text": json.dumps(payload["result"])}],
+                "structuredContent": payload,
+                "isError": False,
+            }
+            if status == 200
+            else {
+                "content": [{"type": "text", "text": payload["error"]}],
+                "isError": True,
+            }
+        )
+    else:
+        return 404, {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": -32601, "message": "Method not found"},
+        }
+    return 200, {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+
 # ---------------------------------------------------------------------------
 # Routing table: (method, regex) -> handler.
 # ---------------------------------------------------------------------------
 _ROUTES: List[Tuple[str, str, Callable[..., Tuple[int, Dict[str, Any]]]]] = [
+    ("GET", r"^/\.well-known/agent-card\.json$", _handle_agent_card),
+    ("GET", r"^/\.well-known/ucp$", _handle_ucp_profile),
+    ("GET", r"^/agents\.txt$", _handle_agents_txt),
+    ("GET", r"^/agents\.json$", _handle_agents_json),
+    ("POST", r"^/message:send$", _handle_a2a_message),
+    ("POST", r"^/mcp$", _handle_mcp),
     ("POST", r"^/intent/compile$", _handle_intent_compile),
     ("POST", r"^/capabilities/discover$", _handle_capabilities_discover),
     ("GET", r"^/capabilities/([^/]+)$", _handle_capability_get),
@@ -219,10 +396,17 @@ class GatewayHandler(BaseHTTPRequestHandler):
 
     server_version = "ElasticWebGateway/0.1.0"
 
-    def _send_json(self, status: int, payload: Dict[str, Any]) -> None:
-        data = json.dumps(payload).encode("utf-8")
+    def _send_payload(self, status: int, payload: Any, path: str) -> None:
+        is_text = isinstance(payload, str)
+        data = (payload if is_text else json.dumps(payload)).encode("utf-8")
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+        content_type = "text/plain; charset=utf-8" if is_text else "application/json"
+        if path == "/message:send" and not is_text:
+            content_type = "application/a2a+json"
+        self.send_header("Content-Type", content_type)
+        if path in {"/agents.txt", "/agents.json", "/.well-known/agent-card.json"}:
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "public, max-age=3600")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -243,14 +427,14 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     raw = self.rfile.read(length) if length else b""
                     body: Dict[str, Any] = json.loads(raw) if raw else {}
                 except (json.JSONDecodeError, ValueError):
-                    self._send_json(400, {"error": "invalid JSON body"})
+                    self._send_payload(400, {"error": "invalid JSON body"}, path)
                     return
                 status, payload = handler(*groups, body=body)
             else:
                 status, payload = handler(*groups)
-            self._send_json(status, payload)
+            self._send_payload(status, payload, path)
             return
-        self._send_json(404, {"error": f"no route for {self.command} {path}"})
+        self._send_payload(404, {"error": f"no route for {self.command} {path}"}, path)
 
     def do_GET(self) -> None:  # noqa: N802
         self._dispatch()
