@@ -5,9 +5,10 @@ logic lives in the packages under ``packages/`` and the ``demo-bank`` app;
 this module only wires HTTP requests to package functions.
 
 The gateway uses only the Python standard library (``http.server``) so it
-runs without any third-party web framework. It exposes eight endpoints:
+runs without any third-party web framework. It exposes nine endpoints:
 
-    POST /intent/compile            compile text -> IntentIR
+    POST /intent/compile            compile text -> compiled IntentIR
+    POST /intent/v1                 validate an Intent IR V1 document
     POST /capabilities/discover     retrieve capability candidates
     GET  /capabilities/{id}         fetch a capability by id
     POST /capabilities/{id}/execute  invoke a demo-bank function
@@ -58,6 +59,7 @@ from capability import Capability  # noqa: E402
 from compiler import RuleBasedCompiler  # noqa: E402
 from factory import build_retriever  # noqa: E402
 from intent_ir import IntentIR  # noqa: E402
+from intent_ir_v1 import try_validate_v1  # noqa: E402
 from manifest import build_manifest  # noqa: E402
 from recipe import Recipe, RecipeStep  # noqa: E402
 from store import RecipeStore  # noqa: E402
@@ -105,6 +107,19 @@ def _handle_intent_compile(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     except ValueError as exc:
         return 422, {"error": str(exc)}
     return 200, ir.model_dump()
+
+
+def _handle_intent_v1(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    """Validate a conversational Intent IR V1 document. Not a compiler."""
+    document: Any
+    if isinstance(body.get("intent"), dict):
+        document = body["intent"]
+    else:
+        document = body
+    ok, doc, err = try_validate_v1(document)
+    if not ok:
+        return 400, {"error": err or "invalid Intent IR V1"}
+    return 200, doc  # type: ignore[return-value]
 
 
 def _handle_capabilities_discover(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
@@ -204,6 +219,7 @@ def _handle_health() -> Tuple[int, Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 _ROUTES: List[Tuple[str, str, Callable[..., Tuple[int, Dict[str, Any]]]]] = [
     ("POST", r"^/intent/compile$", _handle_intent_compile),
+    ("POST", r"^/intent/v1$", _handle_intent_v1),
     ("POST", r"^/capabilities/discover$", _handle_capabilities_discover),
     ("GET", r"^/capabilities/([^/]+)$", _handle_capability_get),
     ("POST", r"^/capabilities/([^/]+)/execute$", _handle_capability_execute),

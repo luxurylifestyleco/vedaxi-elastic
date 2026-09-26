@@ -61,7 +61,7 @@ packages = [
 "telemetry" = "packages/telemetry"
 
 [tool.setuptools.package-data]
-intent_ir = ["schema.json"]
+intent_ir = ["schema.json", "intent_ir.schema.json", "intent_ir_examples.json"]
 elastic_bench = ["reports/*"]
 
 [tool.pytest.ini_options]

@@ -1,0 +1,509 @@
+{
+  "schema": "intent_ir.schema.json",
+  "schema_version": "1.0",
+  "purpose": "Validation corpus for Intent IR V1. Examples record representation, not parser quality.",
+  "examples": [
+    {
+      "id": "call-mom",
+      "kind": "simple",
+      "utterance": "Call Mom.",
+      "note": "A simple intent stays simple: action + object, nothing else.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "call-mom",
+        "revision": 1,
+        "source_text": "Call Mom.",
+        "action": { "status": "resolved", "value": "call", "surface": "Call" },
+        "object": { "status": "resolved", "value": "Mom", "surface": "Mom" }
+      }
+    },
+    {
+      "id": "open-whatsapp",
+      "kind": "simple",
+      "utterance": "Open WhatsApp.",
+      "note": "Target is the app. No object is required.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "open-whatsapp",
+        "revision": 1,
+        "source_text": "Open WhatsApp.",
+        "action": { "status": "resolved", "value": "open", "surface": "Open" },
+        "target": { "status": "resolved", "value": "WhatsApp", "surface": "WhatsApp" }
+      }
+    },
+    {
+      "id": "search-youtube-jazz",
+      "kind": "simple",
+      "utterance": "Search YouTube for jazz.",
+      "note": "One extra slot (query) is enough. No invented domain.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "search-youtube",
+        "revision": 1,
+        "source_text": "Search YouTube for jazz.",
+        "action": { "status": "resolved", "value": "search", "surface": "Search" },
+        "target": { "status": "resolved", "value": "YouTube", "surface": "YouTube" },
+        "slots": [
+          { "name": "query", "status": "resolved", "value": "jazz", "surface": "jazz" }
+        ]
+      }
+    },
+    {
+      "id": "send-this-to-mom",
+      "kind": "deictic",
+      "utterance": "Send this to Mom.",
+      "note": "Deixis stays unresolved. The schema does not invent what 'this' is.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "send-mom",
+        "revision": 1,
+        "source_text": "Send this to Mom.",
+        "action": { "status": "resolved", "value": "send", "surface": "Send" },
+        "object": { "status": "unresolved", "value": null, "surface": "this" },
+        "slots": [
+          { "name": "recipient", "status": "resolved", "value": "Mom", "surface": "Mom" }
+        ]
+      }
+    },
+    {
+      "id": "send-mom-sarcastic",
+      "kind": "preference",
+      "utterance": "Something sarcastic.",
+      "prior": "send-mom",
+      "note": "Same intent_id. Tone is a preference, not a resolved content slot.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "send-mom",
+        "revision": 2,
+        "source_text": "Something sarcastic.",
+        "action": { "status": "resolved", "value": "send", "surface": "Send" },
+        "object": { "status": "unresolved", "value": null, "surface": "this" },
+        "slots": [
+          { "name": "recipient", "status": "resolved", "value": "Mom", "surface": "Mom" }
+        ],
+        "preferences": [
+          { "path": "tone", "value": "sarcastic", "surface": "Something sarcastic" }
+        ]
+      }
+    },
+    {
+      "id": "play-the-second-one",
+      "kind": "deictic",
+      "utterance": "Play the second one.",
+      "note": "Object stays unresolved. Ordinal is a slot, not a guessed title.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "play-second",
+        "revision": 1,
+        "source_text": "Play the second one.",
+        "action": { "status": "resolved", "value": "play", "surface": "Play" },
+        "object": { "status": "unresolved", "value": null, "surface": "the second one" },
+        "slots": [
+          { "name": "ordinal", "status": "resolved", "value": 2, "surface": "the second one" }
+        ]
+      }
+    },
+    {
+      "id": "find-flight-london",
+      "kind": "simple",
+      "utterance": "Find a flight to London.",
+      "note": "Revision 1 of a multi-turn travel intent. Later turns enrich this same id.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "flight-london",
+        "revision": 1,
+        "source_text": "Find a flight to London.",
+        "action": { "status": "resolved", "value": "find", "surface": "Find" },
+        "object": { "status": "resolved", "value": "flight", "surface": "a flight" },
+        "slots": [
+          { "name": "destination", "status": "resolved", "value": "London", "surface": "London" }
+        ]
+      }
+    },
+    {
+      "id": "flight-nothing-overnight",
+      "kind": "exclusion",
+      "utterance": "Nothing overnight.",
+      "prior": "flight-london",
+      "note": "Exclusion is recorded as exclusion. It is not rewritten as a resolved schedule slot.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "flight-london",
+        "revision": 2,
+        "source_text": "Nothing overnight.",
+        "action": { "status": "resolved", "value": "find", "surface": "Find" },
+        "object": { "status": "resolved", "value": "flight", "surface": "a flight" },
+        "slots": [
+          { "name": "destination", "status": "resolved", "value": "London", "surface": "London" }
+        ],
+        "exclusions": [
+          { "path": "schedule", "value": "overnight", "surface": "Nothing overnight" }
+        ]
+      }
+    },
+    {
+      "id": "flight-prefer-emirates",
+      "kind": "preference",
+      "utterance": "I'd prefer Emirates.",
+      "prior": "flight-nothing-overnight",
+      "note": "Preference does not fill an airline slot. Soft want stays soft.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "flight-london",
+        "revision": 3,
+        "source_text": "I'd prefer Emirates.",
+        "action": { "status": "resolved", "value": "find", "surface": "Find" },
+        "object": { "status": "resolved", "value": "flight", "surface": "a flight" },
+        "slots": [
+          { "name": "destination", "status": "resolved", "value": "London", "surface": "London" }
+        ],
+        "preferences": [
+          { "path": "airline", "value": "Emirates", "surface": "I'd prefer Emirates" }
+        ],
+        "exclusions": [
+          { "path": "schedule", "value": "overnight", "surface": "Nothing overnight" }
+        ]
+      }
+    },
+    {
+      "id": "flight-friday",
+      "kind": "revision",
+      "utterance": "Actually, make that Friday.",
+      "prior": "flight-prefer-emirates",
+      "note": "Same intent_id, new revision. when is added. Schema unchanged. Overnight exclusion and Emirates preference survive.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "flight-london",
+        "revision": 4,
+        "source_text": "Actually, make that Friday.",
+        "action": { "status": "resolved", "value": "find", "surface": "Find" },
+        "object": { "status": "resolved", "value": "flight", "surface": "a flight" },
+        "slots": [
+          { "name": "destination", "status": "resolved", "value": "London", "surface": "London" },
+          { "name": "when", "status": "resolved", "value": "Friday", "surface": "Friday" }
+        ],
+        "preferences": [
+          { "path": "airline", "value": "Emirates", "surface": "I'd prefer Emirates" }
+        ],
+        "exclusions": [
+          { "path": "schedule", "value": "overnight", "surface": "Nothing overnight" }
+        ]
+      }
+    },
+    {
+      "id": "dinner-tonight",
+      "kind": "deictic",
+      "utterance": "Find somewhere for dinner tonight.",
+      "note": "'somewhere' stays unresolved. when and occasion are known.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "dinner-tonight",
+        "revision": 1,
+        "source_text": "Find somewhere for dinner tonight.",
+        "action": { "status": "resolved", "value": "find", "surface": "Find" },
+        "object": { "status": "unresolved", "value": null, "surface": "somewhere" },
+        "slots": [
+          { "name": "occasion", "status": "resolved", "value": "dinner", "surface": "dinner" },
+          { "name": "when", "status": "resolved", "value": "tonight", "surface": "tonight" }
+        ]
+      }
+    },
+    {
+      "id": "book-that-one",
+      "kind": "revision",
+      "utterance": "Book that one.",
+      "prior": "dinner-tonight",
+      "note": "Action updates find → book. Object is still unresolved deixis. Same intent.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "dinner-tonight",
+        "revision": 2,
+        "source_text": "Book that one.",
+        "action": { "status": "resolved", "value": "book", "surface": "Book" },
+        "object": { "status": "unresolved", "value": null, "surface": "that one" },
+        "slots": [
+          { "name": "occasion", "status": "resolved", "value": "dinner", "surface": "dinner" },
+          { "name": "when", "status": "resolved", "value": "tonight", "surface": "tonight" }
+        ]
+      }
+    },
+    {
+      "id": "dinner-vegetarian",
+      "kind": "preference",
+      "utterance": "Make it vegetarian.",
+      "prior": "book-that-one",
+      "note": "Preference enriches the same dinner intent without resolving 'that one'.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "dinner-tonight",
+        "revision": 3,
+        "source_text": "Make it vegetarian.",
+        "action": { "status": "resolved", "value": "book", "surface": "Book" },
+        "object": { "status": "unresolved", "value": null, "surface": "that one" },
+        "slots": [
+          { "name": "occasion", "status": "resolved", "value": "dinner", "surface": "dinner" },
+          { "name": "when", "status": "resolved", "value": "tonight", "surface": "tonight" }
+        ],
+        "preferences": [
+          { "path": "diet", "value": "vegetarian", "surface": "Make it vegetarian" }
+        ]
+      }
+    },
+    {
+      "id": "dinner-no-seafood",
+      "kind": "exclusion",
+      "utterance": "No seafood.",
+      "prior": "dinner-vegetarian",
+      "note": "Exclusion sits beside the vegetarian preference. Neither overwrites the other.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "dinner-tonight",
+        "revision": 4,
+        "source_text": "No seafood.",
+        "action": { "status": "resolved", "value": "book", "surface": "Book" },
+        "object": { "status": "unresolved", "value": null, "surface": "that one" },
+        "slots": [
+          { "name": "occasion", "status": "resolved", "value": "dinner", "surface": "dinner" },
+          { "name": "when", "status": "resolved", "value": "tonight", "surface": "tonight" }
+        ],
+        "preferences": [
+          { "path": "diet", "value": "vegetarian", "surface": "Make it vegetarian" }
+        ],
+        "exclusions": [
+          { "path": "cuisine", "value": "seafood", "surface": "No seafood" }
+        ]
+      }
+    },
+    {
+      "id": "call-her",
+      "kind": "deictic",
+      "utterance": "Call her.",
+      "note": "Recipient is known to be missing as a resolved identity.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "call-her",
+        "revision": 1,
+        "source_text": "Call her.",
+        "action": { "status": "resolved", "value": "call", "surface": "Call" },
+        "object": { "status": "unresolved", "value": null, "surface": "her" }
+      }
+    },
+    {
+      "id": "open-it",
+      "kind": "deictic",
+      "utterance": "Open it.",
+      "note": "Target app is unresolved. Do not guess WhatsApp or anything else.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "open-it",
+        "revision": 1,
+        "source_text": "Open it.",
+        "action": { "status": "resolved", "value": "open", "surface": "Open" },
+        "target": { "status": "unresolved", "value": null, "surface": "it" }
+      }
+    },
+    {
+      "id": "hmm",
+      "kind": "incomplete",
+      "utterance": "Hmm.",
+      "note": "Valid IR with only identity fields. No action invented.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "hmm",
+        "revision": 1,
+        "source_text": "Hmm."
+      }
+    },
+    {
+      "id": "cancel",
+      "kind": "simple",
+      "utterance": "Cancel.",
+      "note": "A bare verb is a complete simple intent. Object may be absent.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "cancel",
+        "revision": 1,
+        "source_text": "Cancel.",
+        "action": { "status": "resolved", "value": "cancel", "surface": "Cancel" }
+      }
+    },
+    {
+      "id": "the-cheaper-one",
+      "kind": "preference",
+      "utterance": "The cheaper one.",
+      "note": "Standalone comparative. Object unresolved; cheaper is a preference, not a fake id.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "cheaper-one",
+        "revision": 1,
+        "source_text": "The cheaper one.",
+        "object": { "status": "unresolved", "value": null, "surface": "The cheaper one" },
+        "preferences": [
+          { "path": "price", "value": "cheaper", "surface": "cheaper" }
+        ]
+      }
+    },
+    {
+      "id": "not-whatsapp",
+      "kind": "exclusion",
+      "utterance": "Not WhatsApp.",
+      "note": "An exclusion can exist before an action is known.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "not-whatsapp",
+        "revision": 1,
+        "source_text": "Not WhatsApp.",
+        "exclusions": [
+          { "path": "target", "value": "WhatsApp", "surface": "Not WhatsApp" }
+        ]
+      }
+    },
+    {
+      "id": "text-dad-late",
+      "kind": "rich",
+      "utterance": "Text Dad that I'll be late.",
+      "note": "Richer, still one schema: action, recipient slot, content slot.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "text-dad",
+        "revision": 1,
+        "source_text": "Text Dad that I'll be late.",
+        "action": { "status": "resolved", "value": "text", "surface": "Text" },
+        "slots": [
+          { "name": "recipient", "status": "resolved", "value": "Dad", "surface": "Dad" },
+          { "name": "content", "status": "resolved", "value": "I'll be late", "surface": "I'll be late" }
+        ]
+      }
+    },
+    {
+      "id": "remind-me",
+      "kind": "incomplete",
+      "utterance": "Remind me.",
+      "note": "Action known. Object and when stay unresolved.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "remind-me",
+        "revision": 1,
+        "source_text": "Remind me.",
+        "action": { "status": "resolved", "value": "remind", "surface": "Remind" },
+        "object": { "status": "unresolved", "value": null, "surface": "me" },
+        "slots": [
+          { "name": "when", "status": "unresolved", "value": null }
+        ]
+      }
+    },
+    {
+      "id": "play-jazz",
+      "kind": "simple",
+      "utterance": "Play jazz.",
+      "note": "Play is not Search. Target app is absent, not guessed as YouTube.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "play-jazz",
+        "revision": 1,
+        "source_text": "Play jazz.",
+        "action": { "status": "resolved", "value": "play", "surface": "Play" },
+        "object": { "status": "resolved", "value": "jazz", "surface": "jazz" }
+      }
+    },
+    {
+      "id": "call-john-ambiguous",
+      "kind": "ambiguous",
+      "utterance": "Call John.",
+      "note": "Two Johns. Status is ambiguous. Value is not picked.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "call-john",
+        "revision": 1,
+        "source_text": "Call John.",
+        "action": { "status": "resolved", "value": "call", "surface": "Call" },
+        "object": {
+          "status": "ambiguous",
+          "surface": "John",
+          "candidates": ["John Home", "John Work"]
+        }
+      }
+    },
+    {
+      "id": "send-it",
+      "kind": "deictic",
+      "utterance": "Send it.",
+      "note": "Both object and recipient can be unresolved at once.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "send-it",
+        "revision": 1,
+        "source_text": "Send it.",
+        "action": { "status": "resolved", "value": "send", "surface": "Send" },
+        "object": { "status": "unresolved", "value": null, "surface": "it" },
+        "slots": [
+          { "name": "recipient", "status": "unresolved", "value": null }
+        ]
+      }
+    },
+    {
+      "id": "book-uber-airport",
+      "kind": "rich",
+      "utterance": "Book Uber to the airport.",
+      "note": "VDX-shaped: action, target app, destination slot. Same schema as travel-web.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "book-uber",
+        "revision": 1,
+        "source_text": "Book Uber to the airport.",
+        "action": { "status": "resolved", "value": "book", "surface": "Book" },
+        "target": { "status": "resolved", "value": "Uber", "surface": "Uber" },
+        "slots": [
+          { "name": "destination", "status": "resolved", "value": "airport", "surface": "the airport" }
+        ]
+      }
+    },
+    {
+      "id": "turn-off-wifi",
+      "kind": "simple",
+      "utterance": "Turn off wifi.",
+      "note": "System toggle: action + object + state slot. No domain required.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "toggle-wifi",
+        "revision": 1,
+        "source_text": "Turn off wifi.",
+        "action": { "status": "resolved", "value": "turn_off", "surface": "Turn off" },
+        "object": { "status": "resolved", "value": "wifi", "surface": "wifi" },
+        "slots": [
+          { "name": "state", "status": "resolved", "value": "off", "surface": "off" }
+        ]
+      }
+    },
+    {
+      "id": "read-this",
+      "kind": "deictic",
+      "utterance": "Read this.",
+      "note": "Screen/content deixis. Object unresolved.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "read-this",
+        "revision": 1,
+        "source_text": "Read this.",
+        "action": { "status": "resolved", "value": "read", "surface": "Read" },
+        "object": { "status": "unresolved", "value": null, "surface": "this" }
+      }
+    },
+    {
+      "id": "whatsapp-mom-followup",
+      "kind": "revision",
+      "utterance": "On WhatsApp.",
+      "prior": "call-mom",
+      "note": "Later turn adds target to the Call Mom intent. intent_id unchanged.",
+      "intent": {
+        "schema_version": "1.0",
+        "intent_id": "call-mom",
+        "revision": 2,
+        "source_text": "On WhatsApp.",
+        "action": { "status": "resolved", "value": "call", "surface": "Call" },
+        "object": { "status": "resolved", "value": "Mom", "surface": "Mom" },
+        "target": { "status": "resolved", "value": "WhatsApp", "surface": "WhatsApp" }
+      }
+    }
+  ]
+}

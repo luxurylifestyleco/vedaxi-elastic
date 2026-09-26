@@ -30,7 +30,7 @@ Public packages only. Adaptive policy and recipe learning are not in this reposi
                     ┌─────────────────────────────────────────────────────┐
                     │                    INTENT IR                        │
                     │  packages/intent-ir/                                │
-                    │  IntentIR model · schema.json · compiler.py          │
+                    │  V1 conversational · compiled IntentIR · compiler    │
                     └───────────────────────┬─────────────────────────────┘
                                             │ structured intent
                                             ▼
@@ -83,7 +83,11 @@ Public packages only. Adaptive policy and recipe learning are not in this reposi
 
 ## 1. Intent IR (packages/intent-ir)
 
-The **IntentIR** model (`intent_ir.py`) is a Pydantic v2 data contract describing a user's intent. It is the schema-validated output of a compiler and the input to capability routing. Its fields:
+Two contracts live in this package. They are not the same document.
+
+**Conversational Intent IR V1** (`intent_ir.schema.json`, field guide `INTENT_IR_V1.md`) records what the user wants, including gaps. Required fields are only `schema_version` (`"1.0"`), `intent_id`, and `revision`. Action/object/target/domain are optional slots (`resolved` / `unresolved` / `ambiguous`). Extra meaning goes in `slots[]`. Soft wants are `preferences`; hard nos are `exclusions`. Later turns reuse `intent_id` and bump `revision`. Validate via `intent_ir_v1.py` and `POST /intent/v1`. V1 is **not** the input to capability retrieval.
+
+The **compiled IntentIR** model (`intent_ir.py`) is a Pydantic v2 data contract describing a fully filled intent. It is the schema-validated output of a compiler and the input to capability routing. Its fields:
 
 - `intent_id` — stable unique identifier.
 - `goal` — canonical goal (e.g. `retrieve_financial_document`).
@@ -99,7 +103,7 @@ The **IntentIR** model (`intent_ir.py`) is a Pydantic v2 data contract describin
 - `confidence` — compiler confidence, 0.0–1.0.
 - `metadata` — free-form (compiler version, provenance).
 
-The JSON schema (`schema.json`) is the canonical, language-neutral definition of this contract (draft 2020-12, `additionalProperties: false`).
+The JSON schema (`schema.json`) is the canonical, language-neutral definition of the **compiled** contract (draft 2020-12, `additionalProperties: false`). Do not merge it with V1.
 
 The **compiler** (`compiler.py`) exposes a stable `compile(text) -> IntentIR` interface via the abstract `IntentCompiler` class. The current implementation is a deterministic **rule-based** compiler (`RuleBasedCompiler`) that recognizes a small set of financial-document patterns (bank statement, statement, invoice, receipt) and extracts a `period` constraint from month names. The interface is deliberately decoupled so a real LLM compiler can be swapped in later without changing downstream consumers.
 

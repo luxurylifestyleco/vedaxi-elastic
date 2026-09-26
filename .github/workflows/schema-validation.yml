@@ -58,6 +58,30 @@ jobs:
           print("Sample IntentIR document validates against schema.json")
           EOF
 
+      - name: Validate Intent IR V1 schema and corpus
+        run: |
+          python - <<'EOF'
+          import json
+          import jsonschema
+
+          with open("packages/intent-ir/intent_ir.schema.json") as f:
+              schema = json.load(f)
+          jsonschema.Draft202012Validator.check_schema(schema)
+          print("intent_ir.schema.json is well-formed and a valid JSON Schema")
+
+          with open("packages/intent-ir/intent_ir_examples.json") as f:
+              corpus = json.load(f)
+          validator = jsonschema.Draft202012Validator(schema)
+          errors = []
+          for row in corpus["examples"]:
+              errs = sorted(validator.iter_errors(row["intent"]), key=lambda e: e.path)
+              if errs:
+                  errors.append(f"{row['id']}: {errs[0].message}")
+          if errors:
+              raise SystemExit("V1 corpus failed:\n" + "\n".join(errors))
+          print(f"Validated {len(corpus['examples'])} Intent IR V1 examples")
+          EOF
+
       - name: Validate recipe schema via Pydantic model
         run: |
           PYTHONPATH="packages/recipe-schema" python - <<'EOF'

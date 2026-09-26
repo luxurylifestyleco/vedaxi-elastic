@@ -1,13 +1,21 @@
 # Intent IR (Intent Intermediate Representation)
 
-The Intent IR is the structured, schema-validated description of a user's intent. It is the data contract produced by a compiler (rule-based or LLM) and consumed by downstream capability routing. It is the first stage of the Elastic pipeline and the foundation for minimizing intelligence cost: a well-structured intent lets retrieval and recipes do the work instead of a model.
+There are two Intent IR contracts.
+
+**V1 (conversational)** records what the user wants, including incomplete, preferred, excluded, and deictic information. Schema: `packages/intent-ir/intent_ir.schema.json`. Field guide: `packages/intent-ir/INTENT_IR_V1.md`. Validator: `packages/intent-ir/intent_ir_v1.py`. Live path: `POST /intent/v1`. V1 is not a compiler and is not the retrieval input.
+
+The **compiled Intent IR** is the structured, schema-validated description of a fully filled intent. It is the data contract produced by a compiler (rule-based or LLM) and consumed by downstream capability routing.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `packages/intent-ir/intent_ir.py` | The `IntentIR` Pydantic v2 model. |
-| `packages/intent-ir/schema.json` | The canonical JSON Schema (draft 2020-12) for the IR. |
+| `packages/intent-ir/intent_ir.schema.json` | Conversational Intent IR V1 (draft 2020-12). |
+| `packages/intent-ir/INTENT_IR_V1.md` | V1 field guide. |
+| `packages/intent-ir/intent_ir_examples.json` | V1 validation corpus. |
+| `packages/intent-ir/intent_ir_v1.py` | V1 schema loader / validator. |
+| `packages/intent-ir/intent_ir.py` | Compiled `IntentIR` Pydantic v2 model. |
+| `packages/intent-ir/schema.json` | Compiled JSON Schema (draft 2020-12). |
 | `packages/intent-ir/compiler.py` | The `IntentCompiler` interface and the rule-based implementation. |
 
 ## The `IntentIR` model

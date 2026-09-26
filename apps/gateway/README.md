@@ -24,6 +24,7 @@ framework dependency is required.
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
 | `POST` | `/intent/compile` | `{"text": str}` | Compiled `IntentIR` dict (via `RuleBasedCompiler`) |
+| `POST` | `/intent/v1` | V1 document, or `{"intent": <v1>}` | Validated conversational Intent IR V1 (schema only — not a compiler) |
 | `POST` | `/capabilities/discover` | `{"intent": str}` | Capability candidates (via `build_retriever("keyword", caps)`) |
 | `GET` | `/capabilities/{id}` | — | A capability by id from `build_manifest()` |
 | `POST` | `/capabilities/{id}/execute` | `{"args": dict}` | Result of invoking `bank.<id>(**args)` |

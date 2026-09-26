@@ -14,7 +14,12 @@ That is still language. Elastic's first job is to turn it into **Intent IR**.
 
 ## Intent IR
 
-A structured, schema-validated record of an intent. Implemented as `IntentIR` in `packages/intent-ir/intent_ir.py`. Fields that actually exist:
+Two layers:
+
+1. **Conversational V1** (`packages/intent-ir/intent_ir.schema.json`) — what the user said, including unresolved deixis, preferences, and exclusions. Field guide: [../packages/intent-ir/INTENT_IR_V1.md](../packages/intent-ir/INTENT_IR_V1.md). Not the retrieval input.
+2. **Compiled `IntentIR`** (`packages/intent-ir/intent_ir.py` + `schema.json`) — fully filled routing contract. Unknown fields are **rejected** (`extra="forbid"`). Details: [INTENT-IR.md](INTENT-IR.md).
+
+Compiled fields that actually exist:
 
 | Field | Role |
 |---|---|
@@ -32,9 +37,7 @@ A structured, schema-validated record of an intent. Implemented as `IntentIR` in
 | `confidence` | Compiler confidence |
 | `metadata` | Free-form extras |
 
-Unknown fields are **rejected** (`extra="forbid"`). Details: [INTENT-IR.md](INTENT-IR.md).
-
-The public compiler is **rule-based** (`packages/intent-ir/compiler.py`). It can later be swapped for an LLM compiler without changing `compile(text) -> IntentIR`.
+The public compiler is **rule-based** (`packages/intent-ir/compiler.py`). It can later be swapped for an LLM compiler without changing `compile(text) -> IntentIR`. A later projection from a *fully resolved* V1 document onto compiled `IntentIR` is not V1.
 
 ## Capability
 

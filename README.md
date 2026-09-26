@@ -14,7 +14,9 @@ An **intent** describes what the user is trying to do — not which endpoint, pa
 ```
 User intent: "Find me a hotel in Dubai"
         ↓
-   Intent IR   (structured goal / domain / action / object / constraints)
+   Intent IR V1   (conversational: action / object / slots / preferences)
+        ↓  (optional compile, once resolved)
+   Compiled IntentIR   (goal / domain / action / object / constraints)
         ↓
  Capability retrieval   (only the relevant operations, not the whole catalog)
         ↓
@@ -50,7 +52,7 @@ Runnable examples live in [`examples/`](examples/README.md).
 
 | Package | What it is |
 |---|---|
-| `packages/intent-ir/` | `IntentIR` model, JSON Schema, rule-based compiler |
+| `packages/intent-ir/` | Conversational Intent IR V1 (`intent_ir.schema.json`) + compiled `IntentIR` (`schema.json`) + rule-based compiler |
 | `packages/capability-registry/` | `Capability` model, in-memory registry, demo-bank seed, MCP adapter |
 | `packages/capability-retrieval/` | Keyword / vector retrievers and L0/L1/L2 progressive disclosure |
 | `packages/recipe-schema/` | `Recipe` / `RecipeStep` models and `RecipeStore` (storage + DAG execution) |

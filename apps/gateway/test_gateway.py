@@ -105,6 +105,52 @@ def test_intent_compile_unparseable(server):
 
 
 # ---------------------------------------------------------------------------
+# /intent/v1  (conversational Intent IR — not a compiler)
+# ---------------------------------------------------------------------------
+
+_CALL_MOM_V1 = {
+    "schema_version": "1.0",
+    "intent_id": "call-mom",
+    "revision": 1,
+    "source_text": "Call Mom.",
+    "action": {"status": "resolved", "value": "call", "surface": "Call"},
+    "object": {"status": "resolved", "value": "Mom", "surface": "Mom"},
+}
+
+
+def test_intent_v1_accepts_call_mom(server):
+    status, payload = _request(server, "POST", "/intent/v1", _CALL_MOM_V1)
+    assert status == 200
+    assert payload["schema_version"] == "1.0"
+    assert payload["intent_id"] == "call-mom"
+    assert payload["action"]["value"] == "call"
+    assert payload["object"]["value"] == "Mom"
+    assert "domain" not in payload
+
+
+def test_intent_v1_accepts_wrapped_intent(server):
+    status, payload = _request(server, "POST", "/intent/v1", {"intent": _CALL_MOM_V1})
+    assert status == 200
+    assert payload["intent_id"] == "call-mom"
+
+
+def test_intent_v1_rejects_unknown_field(server):
+    bad = dict(_CALL_MOM_V1)
+    bad["capability_id"] = "nope"
+    status, payload = _request(server, "POST", "/intent/v1", bad)
+    assert status == 400
+    assert "error" in payload
+
+
+def test_intent_compile_unchanged_by_v1_route(server):
+    status, payload = _request(
+        server, "POST", "/intent/compile", {"text": "Get my August bank statement"}
+    )
+    assert status == 200
+    assert payload["goal"] == "retrieve_financial_document"
+
+
+# ---------------------------------------------------------------------------
 # /capabilities/discover
 # ---------------------------------------------------------------------------
 

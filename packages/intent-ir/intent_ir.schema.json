@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://elastic-web.dev/schemas/intent-ir-v1.schema.json",
+  "title": "IntentIR V1",
+  "description": "Conversational Intent Intermediate Representation. Records what the user wants, including incomplete, preferred, excluded, and deictic information. Not an execution plan, capability, or recipe.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "intent_id", "revision"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Intent IR language version. V1 documents are always \"1.0\"."
+    },
+    "intent_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identity of this intent. Later turns reuse the same id; they do not mint a new schema or a new intent."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonic snapshot number of this intent_id. Each conversational update writes a new revision of the same intent."
+    },
+    "source_text": {
+      "type": "string",
+      "description": "Latest utterance that produced this revision. Optional. Never a substitute for structured fields."
+    },
+    "action": {
+      "$ref": "#/$defs/slot",
+      "description": "The verb. Absent when the utterance does not name one. Unresolved when the verb is known to be missing."
+    },
+    "object": {
+      "$ref": "#/$defs/slot",
+      "description": "The primary entity the action applies to. May stay unresolved (\"this\", \"that one\", \"her\")."
+    },
+    "target": {
+      "$ref": "#/$defs/slot",
+      "description": "App, channel, or provider (WhatsApp, YouTube, Emirates as carrier target). Distinct from object."
+    },
+    "domain": {
+      "$ref": "#/$defs/slot",
+      "description": "Optional coarse domain. Never required. Leave absent rather than guessing."
+    },
+    "slots": {
+      "type": "array",
+      "description": "Named extra fields (when, place, destination, content, ordinal, …). The extension point for V1 — new meaning is a new slot name, not a new top-level field.",
+      "items": {
+        "allOf": [
+          { "$ref": "#/$defs/slot" },
+          { "type": "object", "required": ["name"] }
+        ]
+      }
+    },
+    "preferences": {
+      "type": "array",
+      "description": "Soft wants that must not be collapsed into resolved slots (\"I'd prefer Emirates\").",
+      "items": { "$ref": "#/$defs/constraint" }
+    },
+    "exclusions": {
+      "type": "array",
+      "description": "Hard nos that must not be dropped (\"Nothing overnight\").",
+      "items": { "$ref": "#/$defs/constraint" }
+    }
+  },
+  "$defs": {
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required on slots[]. Omitted on action/object/target/domain (name is implicit)."
+        },
+        "value": {
+          "type": ["string", "number", "boolean", "null"],
+          "description": "Resolved content. Null when status is unresolved. Never invent a value to satisfy the schema."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["resolved", "unresolved", "ambiguous"],
+          "description": "resolved = known value; unresolved = known gap; ambiguous = competing candidates, no winner."
+        },
+        "surface": {
+          "type": "string",
+          "description": "Original words (\"this\", \"the second one\", \"tonight\")."
+        },
+        "candidates": {
+          "type": "array",
+          "description": "Competing values when status is ambiguous.",
+          "items": { "type": ["string", "number", "boolean"] }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "resolved" } },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["value"],
+            "properties": {
+              "value": { "type": ["string", "number", "boolean"] }
+            }
+          }
+        }
+      ]
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "value"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dimension being constrained (airline, tone, schedule, cuisine, price, …). Not a JSON Pointer."
+        },
+        "value": {
+          "type": ["string", "number", "boolean"],
+          "description": "The preferred or excluded value. Preferences do not resolve slots; exclusions do not delete slots."
+        },
+        "surface": {
+          "type": "string",
+          "description": "Original words for this constraint."
+        }
+      }
+    }
+  }
+}
