@@ -4,7 +4,8 @@ The :class:`TelemetryRecorder` wraps an :class:`EventBus`, subscribes to
 every emitted event, and folds them into per-execution
 :class:`TelemetryRecord` objects held in an in-memory store. Records are
 finalized when an execution reaches a terminal event
-(``outcome.delivered`` or ``execution.failed``) and can be exported as
+(``outcome.delivered``, ``evaluation.completed``, or ``execution.failed``)
+and can be exported as
 JSON for local inspection.
 
 Telemetry is intentionally local-only: nothing here performs network I/O
@@ -26,6 +27,7 @@ from .events import EventType, ExecutionEvent
 # Terminal events that finalize a record.
 _TERMINAL_EVENTS = {
     EventType.OUTCOME_DELIVERED,
+    EventType.EVALUATION_COMPLETED,
     EventType.EXECUTION_FAILED,
 }
 
@@ -73,6 +75,7 @@ class TelemetryRecord(BaseModel):
     errors: List[str] = Field(default_factory=list)
     retries: int = 0
     outcome: Optional[str] = None
+    outcome_claim: Optional[Dict[str, Any]] = None
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
 
@@ -141,11 +144,11 @@ class TelemetryRecorder:
             if record.latency is None and record.started_at is not None:
                 record.latency = record.completed_at - record.started_at
             if record.outcome is None:
-                record.outcome = (
-                    "delivered"
-                    if event.event_type == EventType.OUTCOME_DELIVERED
-                    else "failed"
-                )
+                record.outcome = {
+                    EventType.OUTCOME_DELIVERED: "delivered",
+                    EventType.EVALUATION_COMPLETED: "reported",
+                    EventType.EXECUTION_FAILED: "failed",
+                }[event.event_type]
             self._completed.append(record)
             self._records.pop(event.trace_id, None)
 
@@ -181,6 +184,14 @@ class TelemetryRecorder:
             error = self._first(payload, "error", "message", "reason")
             if error:
                 record.errors.append(str(error))
+
+        elif event.event_type in {
+            EventType.OUTCOME_DELIVERED,
+            EventType.EVALUATION_COMPLETED,
+        }:
+            claim = payload.get("outcome_claim")
+            if isinstance(claim, dict):
+                record.outcome_claim = claim
 
         elif event.event_type == EventType.RECIPE_STEP_STARTED:
             retries = payload.get("retries")

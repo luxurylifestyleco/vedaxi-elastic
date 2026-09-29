@@ -52,6 +52,7 @@ def execute_recipe(
         trace_id=trace_id,
         intent_id=intent_id,
         version=version,
+        params=args,
     )
 
 

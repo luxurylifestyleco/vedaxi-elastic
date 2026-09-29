@@ -123,7 +123,8 @@ def test_a2a_request_runs_through_elastic_runtime_and_keeps_protocol_metadata():
     assert record.capability_ids == ["search_products"]
     assert record.protocol_metadata["source_protocol"] == "a2a"
     assert record.protocol_metadata["source_endpoint"].endswith("/message:send")
-    assert record.outcome == "delivered"
+    assert record.outcome == "reported"
+    assert record.outcome_claim["verification_type"] == "provider_reported"
 
 
 class _RemoteTransport:

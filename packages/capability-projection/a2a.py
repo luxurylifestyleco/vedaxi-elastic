@@ -126,22 +126,15 @@ class A2AInboundAdapter:
                     trace_id,
                     {"error": execution.error},
                 )
-            self.bus.emit(
-                "outcome.delivered",
-                trace_id=trace_id,
-                intent_id=intent.intent_id,
-                payload={
-                    "protocol": {**protocol, "execution_outcome": "succeeded"},
-                    "evidence_id": trace_id,
-                },
-            )
-            return self._response(
+            response = self._response(
                 task_id,
                 context_id,
                 "TASK_STATE_COMPLETED",
                 trace_id,
                 execution.results,
             )
+            response["task"]["metadata"]["outcomeClaim"] = execution.outcome_claim
+            return response
         except Exception as exc:
             self.bus.emit(
                 "execution.failed",

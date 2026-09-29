@@ -105,7 +105,8 @@ def test_mcp_serving_projects_and_executes_through_runtime_with_evidence(server)
     assert status == 200
     assert trace["protocol_metadata"]["source_protocol"] == "mcp"
     assert trace["capability_ids"] == ["get_balance"]
-    assert trace["outcome"] == "delivered"
+    assert trace["outcome"] == "reported"
+    assert trace["outcome_claim"]["verification_type"] == "provider_reported"
 
 
 def test_a2a_message_enters_intent_retrieval_runtime_and_returns_evidence(server):
@@ -132,4 +133,5 @@ def test_a2a_message_enters_intent_retrieval_runtime_and_returns_evidence(server
     trace = json.loads(raw)
     assert status == 200
     assert trace["protocol_metadata"]["source_protocol"] == "a2a"
-    assert trace["outcome"] == "delivered"
+    assert trace["outcome"] == "reported"
+    assert trace["outcome_claim"]["verification_type"] == "provider_reported"

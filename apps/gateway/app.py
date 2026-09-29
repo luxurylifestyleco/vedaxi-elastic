@@ -151,18 +151,11 @@ def _execute_through_runtime(
     if not execution.success:
         status = 400 if (execution.error or "").startswith("TypeError:") else 500
         return status, {"error": execution.error, "trace_id": trace_id}
-    _BUS.emit(
-        "outcome.delivered",
-        trace_id=trace_id,
-        payload={
-            "protocol": {**protocol, "execution_outcome": "succeeded"},
-            "evidence_id": trace_id,
-        },
-    )
     return 200, {
         "capability_id": capability.id,
         "trace_id": trace_id,
         "result": execution.results["execute"],
+        "outcome_claim": execution.outcome_claim,
     }
 
 
@@ -245,19 +238,33 @@ def _handle_recipe_execute(
         trace_id=trace_id,
         payload={"recipe_id": recipe_id},
     )
+    recipe = _RECIPE_STORE.retrieve(recipe_id)
+    if recipe is None:
+        return 404, {"error": f"recipe not found: {recipe_id}"}
     try:
-        results = _RECIPE_STORE.execute(
-            recipe_id,
+        execution = _RUNNER.run(
+            recipe,
+            params=args,
             executor=_bank_executor,
             trace_id=trace_id,
+            raise_on_error=False,
         )
-    except KeyError as exc:
-        return 404, {"error": str(exc)}
     except Exception as exc:  # noqa: BLE001 - surface any execution failure
         return 500, {"error": f"{type(exc).__name__}: {exc}"}
-    # Emit the terminal outcome event so the telemetry record finalizes.
-    _BUS.emit("outcome.delivered", trace_id=trace_id, payload={"recipe_id": recipe_id})
-    return 200, {"recipe_id": recipe_id, "trace_id": trace_id, "results": results}
+    if not execution.success:
+        return 500, {
+            "error": execution.error,
+            "trace_id": trace_id,
+            "failed_stage": execution.get("failed_stage"),
+            "side_effect_state": execution.get("side_effect_state"),
+            "retryable": execution.get("retryable"),
+        }
+    return 200, {
+        "recipe_id": recipe_id,
+        "trace_id": trace_id,
+        "results": execution.results,
+        "outcome_claim": execution.outcome_claim,
+    }
 
 
 def _handle_trace_get(trace_id: str) -> Tuple[int, Dict[str, Any]]:

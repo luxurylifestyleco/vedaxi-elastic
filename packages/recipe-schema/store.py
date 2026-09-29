@@ -22,8 +22,8 @@ recipe creation and optimization are out of scope.
 
 from __future__ import annotations
 
-import time
-import uuid
+import sys
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from recipe import Recipe, RecipeStatus, RecipeStep
@@ -195,6 +195,7 @@ class RecipeStore:
         trace_id: Optional[str] = None,
         intent_id: Optional[str] = None,
         version: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Execute a recipe's steps in dependency (DAG) order.
 
@@ -224,78 +225,20 @@ class RecipeStore:
         if recipe.status == RecipeStatus.RETIRED:
             raise ValueError(f"recipe is retired: {recipe_id}")
 
-        trace_id = trace_id or uuid.uuid4().hex
-        executor = executor or self._default_executor
-        order = recipe.topological_order()
-        step_by_id = {s.step_id: s for s in recipe.steps}
+        runtime_dir = str(Path(__file__).resolve().parent.parent / "recipe-runtime")
+        if runtime_dir not in sys.path:
+            sys.path.insert(0, runtime_dir)
+        from runner import RecipeDAGRunner
 
-        self.bus.emit(
-            "recipe.started",
+        execution = RecipeDAGRunner(bus=self.bus).run(
+            recipe,
+            params=params,
+            executor=executor or self._default_executor,
             trace_id=trace_id,
             intent_id=intent_id,
-            payload={
-                "recipe_id": recipe.recipe_id,
-                "recipe_version": recipe.version,
-            },
+            raise_on_error=True,
         )
-
-        results: Dict[str, Any] = {}
-        try:
-            for step_id in order:
-                step = step_by_id[step_id]
-                self.bus.emit(
-                    "recipe.step.started",
-                    trace_id=trace_id,
-                    intent_id=intent_id,
-                    payload={
-                        "recipe_id": recipe.recipe_id,
-                        "step_id": step.step_id,
-                        "capability_id": step.capability_id,
-                    },
-                )
-                self.bus.emit(
-                    "tool.called",
-                    trace_id=trace_id,
-                    intent_id=intent_id,
-                    payload={
-                        "tool": step.capability_id,
-                        "args": step.args,
-                    },
-                )
-                result = executor(step.capability_id, step.args)
-                results[step.step_id] = result
-                self.bus.emit(
-                    "tool.completed",
-                    trace_id=trace_id,
-                    intent_id=intent_id,
-                    payload={
-                        "tool": step.capability_id,
-                        "status": "completed",
-                    },
-                )
-        except Exception as exc:  # noqa: BLE001 - record any failure
-            self.bus.emit(
-                "execution.failed",
-                trace_id=trace_id,
-                intent_id=intent_id,
-                payload={
-                    "recipe_id": recipe.recipe_id,
-                    "error": f"{type(exc).__name__}: {exc}",
-                },
-            )
-            raise
-
-        self.bus.emit(
-            "recipe.completed",
-            trace_id=trace_id,
-            intent_id=intent_id,
-            payload={
-                "recipe_id": recipe.recipe_id,
-                "recipe_version": recipe.version,
-                "steps": order,
-            },
-        )
-        return results
+        return execution.results
 
     # ------------------------------------------------------------------
     # Helpers
