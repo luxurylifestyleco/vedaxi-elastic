@@ -44,6 +44,7 @@ DEFAULT_SQLITE_PATH = str(_REPO_ROOT / "db" / "elastic_traces.db")
 
 _TERMINAL_EVENTS = {
     EventType.OUTCOME_DELIVERED,
+    EventType.EVALUATION_COMPLETED,
     EventType.EXECUTION_FAILED,
 }
 
@@ -388,6 +389,11 @@ class DatabaseTelemetryRecorder:
         elif event.event_type == EventType.OUTCOME_DELIVERED:
             self._handle_outcome_delivered(trace_db_id, trace_id, event)
 
+        elif event.event_type == EventType.EVALUATION_COMPLETED:
+            self._handle_outcome_delivered(
+                trace_db_id, trace_id, event, status="reported"
+            )
+
         elif event.event_type == EventType.EXECUTION_FAILED:
             self._handle_execution_failed(trace_db_id, trace_id, event)
 
@@ -674,7 +680,11 @@ class DatabaseTelemetryRecorder:
             )
 
     def _handle_outcome_delivered(
-        self, trace_db_id: int, trace_id: str, event: ExecutionEvent
+        self,
+        trace_db_id: int,
+        trace_id: str,
+        event: ExecutionEvent,
+        status: str = "succeeded",
     ) -> None:
         payload = event.payload or {}
         output_data = payload.get("output") or payload.get("outcome") or payload
@@ -686,10 +696,10 @@ class DatabaseTelemetryRecorder:
             self._execute(
                 """
                 UPDATE execution_traces
-                SET status = 'succeeded', output = %s, finished_at = %s, duration_ms = %s
+                SET status = %s, output = %s, finished_at = %s, duration_ms = %s
                 WHERE trace_id = %s
                 """,
-                (_to_json(output_data), finished_at, duration_ms, trace_id),
+                (status, _to_json(output_data), finished_at, duration_ms, trace_id),
             )
             # Mark any still-running steps as succeeded
             self._execute(

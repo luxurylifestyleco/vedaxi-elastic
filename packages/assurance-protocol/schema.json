@@ -475,6 +475,70 @@
       "type": "object"
     },
     "JsonValue": {},
+    "OutcomeClaim": {
+      "additionalProperties": false,
+      "description": "The strongest outcome state supported by the referenced evidence.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "requested_outcome": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Requested Outcome",
+          "type": "string"
+        },
+        "achieved_state": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Achieved State",
+          "type": "string"
+        },
+        "verification_type": {
+          "enum": [
+            "verified",
+            "provider_reported",
+            "inferred",
+            "unknown"
+          ],
+          "title": "Verification Type",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "remaining_gap": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remaining Gap"
+        }
+      },
+      "required": [
+        "requested_outcome",
+        "achieved_state",
+        "verification_type"
+      ],
+      "title": "OutcomeClaim",
+      "type": "object"
+    },
     "PermissionGrant": {
       "additionalProperties": false,
       "properties": {
@@ -845,6 +909,9 @@
         },
         {
           "$ref": "#/$defs/StepCheckpoint"
+        },
+        {
+          "$ref": "#/$defs/OutcomeClaim"
         },
         {
           "$ref": "#/$defs/EvidenceReceipt"

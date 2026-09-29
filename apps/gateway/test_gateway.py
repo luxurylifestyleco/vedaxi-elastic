@@ -270,7 +270,8 @@ def test_trace_get(server, seeded_recipe):
     assert status == 200
     assert trace["trace_id"] == trace_id
     assert trace["recipe_id"] == "gw-recipe-1"
-    assert trace["outcome"] == "delivered"
+    assert trace["outcome"] == "reported"
+    assert trace["outcome_claim"]["verification_type"] == "provider_reported"
 
 
 def test_trace_get_not_found(server):

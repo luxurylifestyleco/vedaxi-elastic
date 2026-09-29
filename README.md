@@ -39,6 +39,7 @@ Instead of handing an agent every tool schema on every request, Elastic retrieve
 | Create a recipe | [docs/RECIPE_AUTHORING.md](docs/RECIPE_AUTHORING.md) |
 | Connect an existing API | [docs/INTEGRATION_GUIDE.md](docs/INTEGRATION_GUIDE.md) |
 | See how the pieces fit | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Understand protocol adapters | [docs/PROTOCOL_ADAPTERS.md](docs/PROTOCOL_ADAPTERS.md) |
 | Reproduce the benchmark | [docs/TESTING_AND_BENCHMARKS.md](docs/TESTING_AND_BENCHMARKS.md) |
 | Know what is *not* in this repo | [docs/PUBLIC_PRIVATE_BOUNDARY.md](docs/PUBLIC_PRIVATE_BOUNDARY.md) |
 

@@ -46,6 +46,7 @@ for _dir in (
     os.path.join(_PACKAGES_DIR, "capability-registry"),
     os.path.join(_PACKAGES_DIR, "capability-retrieval"),
     os.path.join(_PACKAGES_DIR, "recipe-schema"),
+    os.path.join(_PACKAGES_DIR, "recipe-runtime"),
     os.path.join(_PACKAGES_DIR, "elastic-bench"),
     os.path.join(_PACKAGES_DIR, "telemetry"),
     os.path.join(_APPS_DIR, "demo-bank"),
@@ -64,6 +65,7 @@ from factory import build_retriever  # noqa: E402
 from intent_ir import IntentIR  # noqa: E402
 from manifest import build_manifest  # noqa: E402
 from recipe import Recipe, RecipeStep  # noqa: E402
+from runner import RecipeDAGRunner  # noqa: E402
 from store import RecipeStore  # noqa: E402
 from telemetry import EventBus, TelemetryRecorder  # noqa: E402
 from telemetry.events import EventType  # noqa: E402
@@ -77,6 +79,7 @@ _RETRIEVER = build_retriever("keyword", _MANIFEST)
 _BUS = EventBus()
 _RECORDER = TelemetryRecorder(_BUS)
 _RECIPE_STORE: RecipeStore = build_store()
+_RUNNER = RecipeDAGRunner(bus=_BUS)
 
 # Wire bus into the recipe store for execution telemetry
 _RECIPE_STORE.bus = _BUS
@@ -792,25 +795,16 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             intent_id=recipe.intent_family,
             payload={"recipe_id": target_recipe_id, "recipe_version": recipe.version},
         )
-        _BUS.emit(
-            EventType.RECIPE_STARTED,
-            trace_id=trace_id,
-            intent_id=recipe.intent_family,
-            payload={"recipe_id": target_recipe_id},
-        )
-
         try:
-            results = _RECIPE_STORE.execute(
-                target_recipe_id,
+            execution = _RUNNER.run(
+                recipe,
+                params=args,
                 executor=_bank_executor,
                 trace_id=trace_id,
+                intent_id=recipe.intent_family,
+                raise_on_error=False,
             )
         except Exception as exc:  # noqa: BLE001
-            _BUS.emit(
-                EventType.EXECUTION_FAILED,
-                trace_id=trace_id,
-                payload={"error": str(exc)},
-            )
             elapsed = time.perf_counter() - start_time
             trace_data = {
                 "trace_id": trace_id,
@@ -828,12 +822,15 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             }
             _save_trace_to_db(trace_data)
             return 500, {"error": f"recipe execution failed: {exc}", "trace_id": trace_id}
+        if not execution.success:
+            return 500, {
+                "error": execution.error,
+                "trace_id": trace_id,
+                "failed_stage": execution.get("failed_stage"),
+                "side_effect_state": execution.get("side_effect_state"),
+                "retryable": execution.get("retryable"),
+            }
 
-        _BUS.emit(
-            EventType.OUTCOME_DELIVERED,
-            trace_id=trace_id,
-            payload={"recipe_id": target_recipe_id, "status": "completed"},
-        )
         elapsed = time.perf_counter() - start_time
 
         trace_data = {
@@ -842,7 +839,8 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             "recipe_id": target_recipe_id,
             "recipe_version": recipe.version,
             "capability_ids": [s.capability_id for s in recipe.steps],
-            "outcome": "delivered",
+            "outcome": "reported",
+            "outcome_claim": execution.outcome_claim,
             "latency": round(elapsed, 4),
             "tokens": {"total": 0},
             "tool_calls": [
@@ -852,7 +850,7 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             "errors": [],
             "started_at": now,
             "completed_at": now + elapsed,
-            "payload": {"recipe_id": target_recipe_id, "results": results},
+            "payload": {"recipe_id": target_recipe_id, "results": execution.results},
         }
         _save_trace_to_db(trace_data)
 
@@ -862,7 +860,8 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             "recipe_id": target_recipe_id,
             "trace_id": trace_id,
             "latency_ms": round(elapsed * 1000.0, 3),
-            "results": results,
+            "results": execution.results,
+            "outcome_claim": execution.outcome_claim,
         }
 
     # 2. Execute Capability
@@ -874,10 +873,6 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
         cap = _capability_by_id(target_cap_id)
         if cap is None:
             return 404, {"error": f"capability not found: {target_cap_id}"}
-
-        fn = getattr(bank, target_cap_id, None)
-        if fn is None or not callable(fn):
-            return 500, {"error": f"no callable bank function for {target_cap_id}"}
 
         # Provide sensible mock defaults for demo-bank functions if arguments omitted
         effective_args = dict(args)
@@ -906,20 +901,27 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             trace_id=trace_id,
             payload={"capability_ids": [target_cap_id]},
         )
-        _BUS.emit(
-            EventType.TOOL_CALLED,
-            trace_id=trace_id,
-            payload={"tool": target_cap_id, "args": effective_args},
-        )
-
         try:
-            result = fn(**effective_args)
-        except Exception as exc:  # noqa: BLE001
-            _BUS.emit(
-                EventType.EXECUTION_FAILED,
-                trace_id=trace_id,
-                payload={"tool": target_cap_id, "error": str(exc)},
+            recipe = Recipe(
+                recipe_id=f"dashboard-{trace_id}",
+                intent_family="direct_capability_execution",
+                steps=[
+                    RecipeStep(
+                        step_id="execute",
+                        action="execute",
+                        capability_id=target_cap_id,
+                        args=effective_args,
+                    )
+                ],
+                success_conditions=["capability execution completed"],
             )
+            execution = _RUNNER.run(
+                recipe,
+                executor=_bank_executor,
+                trace_id=trace_id,
+                raise_on_error=False,
+            )
+        except Exception as exc:  # noqa: BLE001
             elapsed = time.perf_counter() - start_time
             trace_data = {
                 "trace_id": trace_id,
@@ -937,17 +939,16 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             }
             _save_trace_to_db(trace_data)
             return 500, {"error": f"capability execution failed: {exc}", "trace_id": trace_id}
+        if not execution.success:
+            return 500, {
+                "error": execution.error,
+                "trace_id": trace_id,
+                "failed_stage": execution.get("failed_stage"),
+                "side_effect_state": execution.get("side_effect_state"),
+                "retryable": execution.get("retryable"),
+            }
 
-        _BUS.emit(
-            EventType.TOOL_COMPLETED,
-            trace_id=trace_id,
-            payload={"tool": target_cap_id, "result": result},
-        )
-        _BUS.emit(
-            EventType.OUTCOME_DELIVERED,
-            trace_id=trace_id,
-            payload={"capability_id": target_cap_id},
-        )
+        result = execution.results["execute"]
         elapsed = time.perf_counter() - start_time
 
         trace_data = {
@@ -956,7 +957,8 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             "recipe_id": None,
             "recipe_version": None,
             "capability_ids": [target_cap_id],
-            "outcome": "delivered",
+            "outcome": "reported",
+            "outcome_claim": execution.outcome_claim,
             "latency": round(elapsed, 4),
             "tokens": {"prompt": 110, "completion": 4, "total": 114},
             "tool_calls": [{"name": target_cap_id, "status": "completed", "duration": round(elapsed, 4)}],
@@ -974,6 +976,7 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             "trace_id": trace_id,
             "latency_ms": round(elapsed * 1000.0, 3),
             "result": result,
+            "outcome_claim": execution.outcome_claim,
         }
 
     return 400, {"error": "must specify either 'capability_id' or 'recipe_id'"}

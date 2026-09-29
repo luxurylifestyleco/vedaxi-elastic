@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import pytest
 from pydantic import ValidationError
-from assurance import AssuranceDocument, AssuranceIntent, Budget, EvidenceReceipt, PermissionGrant, StepCheckpoint
+from assurance import AssuranceDocument, AssuranceIntent, Budget, EvidenceReceipt, OutcomeClaim, PermissionGrant, StepCheckpoint
 
 DIGEST = 'a' * 64
 TIME = '2026-09-22T10:00:00Z'
@@ -57,3 +57,30 @@ def test_checkpoint_and_grant_validity():
                  issued_at=TIME,expires_at=TIME,approval_receipt_ref='approval',signature_ref='signature')
     with pytest.raises(ValidationError): PermissionGrant(**grant)
     assert PermissionGrant(**{**grant,'expires_at':'2026-09-22T11:00:00Z'})
+
+
+def test_outcome_claim_preserves_verification_strength_and_remaining_gap():
+    claim = OutcomeClaim(
+        requested_outcome='booking_confirmed',
+        achieved_state='request_submitted',
+        verification_type='provider_reported',
+        evidence_refs=['provider-response-1'],
+        remaining_gap='Provider has not confirmed the booking',
+    )
+    assert claim.achieved_state == 'request_submitted'
+    assert claim.remaining_gap is not None
+
+
+def test_outcome_claim_rejects_unsupported_certainty():
+    with pytest.raises(ValidationError, match='require evidence'):
+        OutcomeClaim(
+            requested_outcome='booking_confirmed',
+            achieved_state='booking_confirmed',
+            verification_type='verified',
+        )
+    with pytest.raises(ValidationError, match='remaining gap'):
+        OutcomeClaim(
+            requested_outcome='booking_confirmed',
+            achieved_state='unknown',
+            verification_type='unknown',
+        )

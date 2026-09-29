@@ -43,8 +43,8 @@ def test_list_capabilities_matches_discovery(adapter: MCPAdapter) -> None:
 
 
 def test_discovery_falls_back_to_demo_registry() -> None:
-    # No explicit registry and no MCP SDK -> demo tools are used.
-    adapter = MCPAdapter()
+    # Demo tools are fixtures and require explicit opt-in.
+    adapter = MCPAdapter(allow_demo_fixtures=True)
     caps = adapter.discover()
     assert len(caps) == len(DEMO_TOOL_REGISTRY)
 

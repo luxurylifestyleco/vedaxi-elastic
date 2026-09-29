@@ -25,6 +25,11 @@ _RECIPE_SCHEMA_DIR = os.path.join(_PACKAGES_DIR, "recipe-schema")
 if _RECIPE_SCHEMA_DIR not in sys.path:
     sys.path.insert(0, _RECIPE_SCHEMA_DIR)
 
+_ASSURANCE_DIR = os.path.join(_PACKAGES_DIR, "assurance-protocol")
+if _ASSURANCE_DIR not in sys.path:
+    sys.path.insert(0, _ASSURANCE_DIR)
+
+from assurance import OutcomeClaim  # noqa: E402
 from recipe import Recipe, RecipeStatus, RecipeStep  # noqa: E402
 
 # Executor callable: (capability_id, args) -> result
@@ -64,6 +69,10 @@ class ExecutionResult(dict):
         success: bool = True,
         error: Optional[str] = None,
         step_metrics: Optional[List[StepMetric]] = None,
+        outcome_claim: Optional[Dict[str, Any]] = None,
+        failed_stage: Optional[str] = None,
+        side_effect_state: Optional[str] = None,
+        retryable: Optional[bool] = None,
     ) -> None:
         super().__init__(
             recipe_id=recipe_id,
@@ -73,6 +82,10 @@ class ExecutionResult(dict):
             success=success,
             error=error,
             step_metrics=step_metrics or [],
+            outcome_claim=outcome_claim,
+            failed_stage=failed_stage,
+            side_effect_state=side_effect_state,
+            retryable=retryable,
         )
 
     @property
@@ -103,6 +116,10 @@ class ExecutionResult(dict):
     def step_metrics(self) -> List[StepMetric]:
         return self["step_metrics"]
 
+    @property
+    def outcome_claim(self) -> Optional[Dict[str, Any]]:
+        return self.get("outcome_claim")
+
 
 class RecipeDAGRunner:
     """Executes recipes according to their dependency Directed Acyclic Graph (DAG).
@@ -130,6 +147,54 @@ class RecipeDAGRunner:
     def _default_executor(capability_id: str, args: Dict[str, Any]) -> Any:
         """Default no-op executor when none is supplied."""
         return {"ok": True, "capability": capability_id, "args": args}
+
+    @staticmethod
+    def _claim_outcome(
+        requested_outcome: str,
+        results: Dict[str, Any],
+        trace_id: str,
+    ) -> OutcomeClaim:
+        """Describe provider evidence without promoting execution to outcome success."""
+        if not results:
+            return OutcomeClaim(
+                requested_outcome=requested_outcome,
+                achieved_state="unknown",
+                verification_type="unknown",
+                remaining_gap="No provider result was returned",
+            )
+        result = next(reversed(results.values()))
+        if isinstance(result, dict):
+            status = result.get("status")
+            if not status and not (set(result) - {"ok"}):
+                return OutcomeClaim(
+                    requested_outcome=requested_outcome,
+                    achieved_state="unknown",
+                    verification_type="unknown",
+                    evidence_refs=[trace_id],
+                    remaining_gap="Provider returned no outcome evidence",
+                )
+            if isinstance(status, str) and status.strip():
+                achieved = status.strip().lower()
+            else:
+                achieved = "result_returned"
+            return OutcomeClaim(
+                requested_outcome=requested_outcome,
+                achieved_state=achieved,
+                verification_type="provider_reported",
+                evidence_refs=[trace_id],
+                remaining_gap=(
+                    None
+                    if achieved.replace("_", " ") == requested_outcome.lower()
+                    else "Requested outcome was not independently verified"
+                ),
+            )
+        return OutcomeClaim(
+            requested_outcome=requested_outcome,
+            achieved_state="result_returned",
+            verification_type="provider_reported",
+            evidence_refs=[trace_id],
+            remaining_gap="Requested outcome was not independently verified",
+        )
 
     # ------------------------------------------------------------------
     # Validation & Topological Ordering
@@ -382,6 +447,9 @@ class RecipeDAGRunner:
             intent_family = recipe.intent_family
             recipe_version = recipe.version
             steps = recipe.steps
+            requested_outcome = (
+                " and ".join(recipe.success_conditions) or recipe.intent_family
+            )
             if recipe.status == RecipeStatus.RETIRED:
                 raise ValueError(f"Recipe '{recipe_id}' is retired and cannot be executed")
         else:
@@ -389,6 +457,7 @@ class RecipeDAGRunner:
             intent_family = "unknown"
             recipe_version = "1.0.0"
             steps = list(recipe)
+            requested_outcome = intent_family
 
         step_map = {s.step_id: s for s in steps}
         order = self.topological_order(steps)
@@ -408,6 +477,7 @@ class RecipeDAGRunner:
         step_metrics: List[StepMetric] = []
         overall_success = True
         error_msg: Optional[str] = None
+        failed_stage: Optional[str] = None
 
         for sid in order:
             step = step_map[sid]
@@ -447,6 +517,7 @@ class RecipeDAGRunner:
                     )
                 )
                 overall_success = False
+                failed_stage = sid
 
                 if active_bus is not None:
                     active_bus.emit(
@@ -457,6 +528,9 @@ class RecipeDAGRunner:
                             "recipe_id": recipe_id,
                             "step_id": sid,
                             "error": error_msg,
+                            "failed_stage": sid,
+                            "side_effect_state": "unknown",
+                            "retryable": None,
                         },
                     )
 
@@ -465,6 +539,19 @@ class RecipeDAGRunner:
                 break
 
         total_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
+        claim = (
+            self._claim_outcome(requested_outcome, results, trace_id)
+            if overall_success
+            else OutcomeClaim(
+                requested_outcome=requested_outcome,
+                achieved_state="execution_failed",
+                verification_type="unknown",
+                evidence_refs=[trace_id],
+                remaining_gap=(
+                    f"Execution failed at {failed_stage}; provider side effects are unknown"
+                ),
+            )
+        )
 
         if overall_success and active_bus is not None:
             active_bus.emit(
@@ -475,7 +562,19 @@ class RecipeDAGRunner:
                     "recipe_id": recipe_id,
                     "recipe_version": recipe_version,
                     "steps": order,
+                    "outcome_claim": claim.model_dump(),
                 },
+            )
+            active_bus.emit(
+                (
+                    "outcome.delivered"
+                    if claim.verification_type == "verified"
+                    and claim.remaining_gap is None
+                    else "evaluation.completed"
+                ),
+                trace_id=trace_id,
+                intent_id=intent_id,
+                payload={"outcome_claim": claim.model_dump()},
             )
 
         # Standard Control benchmark metrics
@@ -500,4 +599,8 @@ class RecipeDAGRunner:
             success=overall_success,
             error=error_msg,
             step_metrics=step_metrics,
+            outcome_claim=claim.model_dump(),
+            failed_stage=failed_stage,
+            side_effect_state="unknown" if not overall_success else None,
+            retryable=None,
         )

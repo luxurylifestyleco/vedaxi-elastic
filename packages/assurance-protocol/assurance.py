@@ -144,6 +144,24 @@ class AcceptanceResult(Contract):
     evidence_refs: list[Text] = Field(min_length=1)
 
 
+class OutcomeClaim(Contract):
+    """The strongest outcome state supported by the referenced evidence."""
+
+    requested_outcome: Text
+    achieved_state: Text
+    verification_type: Literal['verified', 'provider_reported', 'inferred', 'unknown']
+    evidence_refs: list[Text] = Field(default_factory=list)
+    remaining_gap: Text | None = None
+
+    @model_validator(mode='after')
+    def evidence_matches_certainty(self):
+        if self.verification_type != 'unknown' and not self.evidence_refs:
+            raise ValueError('Non-unknown outcome claims require evidence')
+        if self.verification_type == 'unknown' and self.remaining_gap is None:
+            raise ValueError('Unknown outcome claims require a remaining gap')
+        return self
+
+
 class EvidenceReceipt(Contract):
     receipt_id: Text
     intent_id: Text
@@ -174,4 +192,4 @@ class EvidenceReceipt(Contract):
 
 class AssuranceDocument(Contract):
     """Schema-generation envelope: one explicitly named contract per document."""
-    document: AssuranceIntent | CapabilityTrustClaim | PermissionGrant | PermissionReceipt | StepCheckpoint | EvidenceReceipt
+    document: AssuranceIntent | CapabilityTrustClaim | PermissionGrant | PermissionReceipt | StepCheckpoint | OutcomeClaim | EvidenceReceipt

@@ -134,7 +134,7 @@ def test_execute_emits_telemetry_events():
 
     types = [e.event_type for e in collector.events]
     assert types[0] == "recipe.started"
-    assert types[-1] == "recipe.completed"
+    assert types[-1] == "evaluation.completed"
     assert "recipe.step.started" in types
     assert "tool.called" in types
     assert "tool.completed" in types
