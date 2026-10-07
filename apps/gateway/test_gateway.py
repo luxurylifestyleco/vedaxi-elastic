@@ -172,6 +172,75 @@ def test_capability_execute_not_found(server):
     assert "error" in payload
 
 
+def test_capability_execute_projection_does_not_need_store(server):
+    status, payload = _request(
+        server,
+        "POST",
+        "/capabilities/get_balance/execute",
+        {
+            "args": {"account_id": "ACC-1001"},
+            "projection": {
+                "meta_schema_version": "1.0",
+                "execution_contract_version": "1.0",
+                "runtime": {"network": True, "execution_state": "foreground"},
+                "entries": [
+                    {
+                        "capability_id": "get_balance",
+                        "ecosystem_attested": True,
+                        "requires_network": False,
+                        "states": {
+                            "EXISTS": True,
+                            "INSTALLED": True,
+                            "ENABLED": True,
+                            "AUTHORIZED": True,
+                            "SUPPORTED": True,
+                            "EXECUTABLE": True,
+                            "AVAILABLE": True,
+                        },
+                    }
+                ],
+            },
+        },
+    )
+    assert status == 200
+    assert payload["capability_id"] == "get_balance"
+    assert "available_balance" in payload["result"]
+
+
+def test_capability_execute_projection_blocks_before_tool(server):
+    status, payload = _request(
+        server,
+        "POST",
+        "/capabilities/get_balance/execute",
+        {
+            "args": {"account_id": "ACC-1001"},
+            "projection": {
+                "meta_schema_version": "1.0",
+                "execution_contract_version": "1.0",
+                "entries": [
+                    {
+                        "capability_id": "get_balance",
+                        "ecosystem_attested": True,
+                        "unsupported_reason": "OS capability unavailable",
+                        "states": {
+                            "EXISTS": True,
+                            "INSTALLED": True,
+                            "ENABLED": True,
+                            "AUTHORIZED": True,
+                            "SUPPORTED": False,
+                            "EXECUTABLE": False,
+                            "AVAILABLE": False,
+                        },
+                    }
+                ],
+            },
+        },
+    )
+    assert status == 409
+    assert payload["failure"] == "DEVICE_UNSUPPORTED"
+    assert "result" not in payload
+
+
 def test_capability_execute_bad_args(server):
     status, payload = _request(
         server,

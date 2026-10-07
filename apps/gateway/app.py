@@ -45,6 +45,7 @@ for _dir in (
     os.path.join(_PACKAGES_DIR, "capability-registry"),
     os.path.join(_PACKAGES_DIR, "capability-retrieval"),
     os.path.join(_PACKAGES_DIR, "recipe-schema"),
+    os.path.join(_PACKAGES_DIR, "federation"),
     os.path.join(_APPS_DIR, "demo-bank"),
 ):
     if _dir not in sys.path:
@@ -61,6 +62,7 @@ from intent_ir import IntentIR  # noqa: E402
 from manifest import build_manifest  # noqa: E402
 from recipe import Recipe, RecipeStep  # noqa: E402
 from store import RecipeStore  # noqa: E402
+from hot_path import HotPathViolation, execute_locally  # noqa: E402
 from telemetry import EventBus, TelemetryRecorder  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -138,6 +140,41 @@ def _handle_capability_execute(
     args = body.get("args", {})
     if not isinstance(args, dict):
         return 400, {"error": "'args' must be an object"}
+    projection = body.get("projection")
+    if projection is not None:
+        if not isinstance(projection, dict):
+            return 409, {
+                "failure": "SCHEMA_INCOMPATIBLE",
+                "reason": "projection must be an object",
+                "recovery": "report_impossibility",
+            }
+        try:
+            # Local projection only. No store client is constructed or called.
+            outcome = execute_locally(
+                capability_id,
+                projection,
+                lambda cid, call_args: _bank_executor(cid, call_args),
+                args,
+            )
+        except HotPathViolation as exc:
+            return 409, {
+                "failure": "SCHEMA_INCOMPATIBLE",
+                "reason": str(exc),
+                "recovery": "report_impossibility",
+            }
+        except KeyError:
+            return 409, {
+                "failure": "TOOL_UNAVAILABLE",
+                "reason": f"no local executor for {capability_id}",
+                "recovery": "select_alternative",
+            }
+        if not outcome.executed:
+            return 409, outcome.decision.to_dict()
+        return 200, {
+            "capability_id": capability_id,
+            "result": outcome.result,
+            "failure": None,
+        }
     fn = getattr(bank, capability_id, None)
     if fn is None or not callable(fn):
         return 500, {"error": f"no callable bank function for {capability_id!r}"}
