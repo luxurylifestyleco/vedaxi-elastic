@@ -105,9 +105,28 @@ class RuleBasedCompiler(IntentCompiler):
 
         lowered = text.lower()
 
-        # Match a known document pattern.
-        for pattern, obj, domain, action, goal, output in _DOCUMENT_RULES:
-            if pattern.search(lowered):
+        matches = [rule for rule in _DOCUMENT_RULES if rule[0].search(lowered)]
+        kinds = []
+        if re.search(r"\bstatement\b", lowered):
+            kinds.append("statement")
+        if re.search(r"\binvoice\b", lowered):
+            kinds.append("invoice")
+        if re.search(r"\breceipt\b", lowered):
+            kinds.append("receipt")
+        if len(kinds) > 1:
+            raise ValueError(
+                "multiple document intents; clarification required before emit"
+            )
+        if re.search(
+            r"\b(dubai|abu dhabi|london|paris|usd|aed|eur|gbp|dollars|dirhams)\b",
+            lowered,
+        ) or re.search(r"\$\s*\d", text):
+            raise ValueError(
+                "unsupported constraint; refusing to emit a partial intent"
+            )
+
+        # Match a known document pattern. Prefer the first, most specific rule.
+        for pattern, obj, domain, action, goal, output in matches:
                 constraints: Dict[str, object] = {}
                 period = self._extract_period(lowered)
                 if period is not None:
@@ -125,7 +144,8 @@ class RuleBasedCompiler(IntentCompiler):
                     disclosure={},
                     success_conditions=[f"{obj} delivered as {output}"],
                     confidence=0.9,
-                    metadata={"compiler": "rule-based", "version": "0.1.0"},
+                    metadata={"compiler": "rule-based", "version": "0.1.1",
+                              "validated_constraints": list(constraints)},
                 )
 
         raise ValueError(f"unable to parse intent from: {text!r}")

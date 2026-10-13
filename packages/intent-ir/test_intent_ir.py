@@ -196,6 +196,18 @@ def test_compiler_rejects_unrecognized_text():
         compiler.compile("please do something completely unrelated")
 
 
+def test_compiler_rejects_unsupported_constraint():
+    compiler = RuleBasedCompiler(default_year=2026)
+    with pytest.raises(ValueError, match="unsupported constraint"):
+        compiler.compile("I need my August bank statement in Dubai")
+
+
+def test_compiler_rejects_multiple_document_intents():
+    compiler = RuleBasedCompiler(default_year=2026)
+    with pytest.raises(ValueError, match="multiple document intents"):
+        compiler.compile("I need my August bank statement and the invoice")
+
+
 def test_compiler_interface_is_abstract():
     with pytest.raises(TypeError):
         IntentCompiler()  # type: ignore[abstract]
