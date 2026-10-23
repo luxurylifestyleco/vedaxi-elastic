@@ -90,18 +90,14 @@ def test_granted_permission_succeeds(read_cap):
     guard.check(read_cap, principal=valid_user)
 
 
-def test_sensitive_action_requires_explicit_approval(sensitive_cap):
+def test_caller_flag_and_bypass_do_not_approve(sensitive_cap):
     guard = AuthorizationGuard()
     user_with_write = SecurityPrincipal(
         subject="user_financier",
-        granted_permissions={"payments:write"},
+        granted_permissions={"payments:write", "approval:bypass"},
     )
-    # Calling sensitive action without explicit approval fails
     with pytest.raises(SensitiveActionDeniedError):
-        guard.check(sensitive_cap, principal=user_with_write, explicit_approval=False)
-
-    # Calling with explicit approval succeeds
-    guard.check(sensitive_cap, principal=user_with_write, explicit_approval=True)
+        guard.check(sensitive_cap, principal=user_with_write, explicit_approval=True)
 
 
 def test_cross_tenant_is_denied(read_cap):

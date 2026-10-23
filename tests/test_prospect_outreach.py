@@ -167,7 +167,7 @@ def test_prospect_outreach_stops_before_contact():
         )
         with pytest.raises(SensitiveActionDeniedError):
             gateway_app._unified_executor("send_outreach", {}, principal=principal)
-        with pytest.raises(RuntimeError, match="refusing to contact"):
+        with pytest.raises(SensitiveActionDeniedError):
             gateway_app._unified_executor(
                 "send_outreach", {}, principal=principal, explicit_approval=True
             )

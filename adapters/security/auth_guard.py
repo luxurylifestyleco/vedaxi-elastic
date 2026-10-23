@@ -159,7 +159,8 @@ class AuthorizationGuard:
         missing = required - caller.granted_permissions
         if missing:
             return PolicyDecision(Decision.DENY, "missing_permission")
-        if sensitive and not explicit_approval and "approval:bypass" not in caller.granted_permissions:
+        # A caller boolean and a permission string are not approval evidence.
+        if sensitive:
             return PolicyDecision(Decision.REQUIRE_APPROVAL, "approval_required")
         return PolicyDecision(Decision.ALLOW, "permitted")
 
