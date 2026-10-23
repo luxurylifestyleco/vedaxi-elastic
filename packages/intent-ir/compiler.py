@@ -105,6 +105,69 @@ class RuleBasedCompiler(IntentCompiler):
 
         lowered = text.lower()
 
+        # Outreach planning is a goal, not a recipe. Steps come from the capability book.
+        if re.search(r"\bprospects\b", lowered) and re.search(r"\boutreach\b", lowered):
+            return IntentIR(
+                intent_id=IntentIR.new_id(),
+                goal="prepare_outreach",
+                domain="sales",
+                action="prepare",
+                object="outreach_plan",
+                constraints={"stop_before_contact": True},
+                context={"source_text": text.strip()},
+                desired_output="json",
+                authority={"human_approval_before_contact": True},
+                disclosure={},
+                success_conditions=[
+                    "prospects identified",
+                    "companies researched",
+                    "outreach plan prepared",
+                    "human approval identified",
+                    "no contact sent",
+                ],
+                confidence=0.9,
+                metadata={"compiler": "rule-based", "version": "0.1.1"},
+            )
+
+        # Omnichannel lead management and operations intent
+        if re.search(r"\bleads?\b", lowered) and (
+            re.search(r"\bfollow-?ups?\b", lowered)
+            or re.search(r"\bresponse\s+times?\b", lowered)
+            or re.search(r"\bsatisfaction\b", lowered)
+            or re.search(r"\battention\b", lowered)
+        ):
+            target_mins = 15
+            match_mins = re.search(r"(\d+)\s*(?:minute|min)", lowered)
+            if match_mins:
+                target_mins = int(match_mins.group(1))
+            return IntentIR(
+                intent_id=IntentIR.new_id(),
+                goal="manage_omnichannel_operations",
+                domain="operations",
+                action="coordinate",
+                object="omnichannel_operations_plan",
+                constraints={
+                    "stop_before_contact": True,
+                    "target_response_time_minutes": target_mins,
+                },
+                context={"source_text": text.strip()},
+                desired_output="json",
+                authority={"human_approval_before_contact": True},
+                disclosure={},
+                success_conditions=[
+                    "leads ingested across channels",
+                    "prospects researched",
+                    "response time targets monitored",
+                    "customer satisfaction assessed",
+                    "follow-ups coordinated",
+                    "exceptions and escalations surfaced",
+                    "human approval identified",
+                    "no contact sent",
+                ],
+                confidence=0.95,
+                metadata={"compiler": "rule-based", "version": "0.1.2"},
+            )
+
         matches = [rule for rule in _DOCUMENT_RULES if rule[0].search(lowered)]
         kinds = []
         if re.search(r"\bstatement\b", lowered):

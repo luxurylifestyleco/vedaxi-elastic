@@ -65,4 +65,4 @@ intent_ir = ["schema.json", "intent_ir.schema.json", "intent_ir_examples.json"]
 elastic_bench = ["reports/*"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages", "apps"]
+testpaths = ["packages", "apps", "adapters", "tests"]

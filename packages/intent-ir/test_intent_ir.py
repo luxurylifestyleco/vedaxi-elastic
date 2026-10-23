@@ -158,6 +158,38 @@ def test_model_defaults():
 # ---------------------------------------------------------------------------
 
 
+def test_compiler_outreach_is_a_goal_not_a_workflow(validator):
+    compiler = RuleBasedCompiler()
+    ir = compiler.compile(
+        "Find suitable prospects, research their companies, prepare a personalized outreach plan, "
+        "and report which prospects need human approval before contact."
+    )
+    assert ir.goal == "prepare_outreach"
+    assert ir.domain == "sales"
+    assert ir.constraints["stop_before_contact"] is True
+    assert "no contact sent" in ir.success_conditions
+    assert "steps" not in ir.model_dump()
+    validate(ir.model_dump(), validator.schema)
+
+
+def test_compiler_omnichannel_operations_intent(validator):
+    compiler = RuleBasedCompiler()
+    ir = compiler.compile(
+        "Help me manage our incoming leads, research prospects, coordinate follow-ups, "
+        "keep response times within our targets, monitor customer satisfaction, and show me which situations require my attention."
+    )
+    assert ir.goal == "manage_omnichannel_operations"
+    assert ir.domain == "operations"
+    assert ir.action == "coordinate"
+    assert ir.object == "omnichannel_operations_plan"
+    assert ir.constraints["stop_before_contact"] is True
+    assert ir.constraints["target_response_time_minutes"] == 15
+    assert ir.authority["human_approval_before_contact"] is True
+    assert "no contact sent" in ir.success_conditions
+    assert "exceptions and escalations surfaced" in ir.success_conditions
+    validate(ir.model_dump(), validator.schema)
+
+
 def test_compiler_handles_example(validator):
     compiler = RuleBasedCompiler(default_year=2026)
     ir = compiler.compile("I need my August bank statement")

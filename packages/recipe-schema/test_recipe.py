@@ -390,3 +390,31 @@ def test_execute_failure_emits_failed_event():
 
     types = [e.event_type for e in collector.events]
     assert types[-1] == "execution.failed"
+
+
+def test_execute_resolves_from_bindings():
+    store = RecipeStore()
+    store.create(
+        Recipe(
+            recipe_id="recipe.bind",
+            intent_family="bind",
+            steps=[
+                RecipeStep(step_id="one", action="a", capability_id="cap.one", args={"n": 1}),
+                RecipeStep(
+                    step_id="two",
+                    action="a",
+                    capability_id="cap.two",
+                    args={"prior": {"$from": "one"}},
+                    depends_on=["one"],
+                ),
+            ],
+        )
+    )
+
+    def executor(capability_id: str, args: dict):
+        if capability_id == "cap.one":
+            return {"value": args["n"]}
+        return args["prior"]
+
+    results = store.execute("recipe.bind", executor=executor)
+    assert results["two"] == {"value": 1}

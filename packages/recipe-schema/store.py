@@ -253,16 +253,17 @@ class RecipeStore:
                         "capability_id": step.capability_id,
                     },
                 )
+                args = _resolve_bindings(step.args, results)
                 self.bus.emit(
                     "tool.called",
                     trace_id=trace_id,
                     intent_id=intent_id,
                     payload={
                         "tool": step.capability_id,
-                        "args": step.args,
+                        "args": args,
                     },
                 )
-                result = executor(step.capability_id, step.args)
+                result = executor(step.capability_id, args)
                 results[step.step_id] = result
                 self.bus.emit(
                     "tool.completed",
@@ -314,3 +315,21 @@ class RecipeStore:
 
     def __len__(self) -> int:
         return len(self._recipes)
+
+
+def _resolve_bindings(value: Any, results: Dict[str, Any]) -> Any:
+    """Replace ``{"$from": step_id}`` with that step's result.
+
+    ponytail: only this one placeholder, not an expression language.
+    Upgrade path: typed produces/consumes mapping if bindings get nested.
+    """
+    if isinstance(value, dict) and set(value) == {"$from"}:
+        step_id = value["$from"]
+        if step_id not in results:
+            raise KeyError(f"binding references unfinished step {step_id!r}")
+        return results[step_id]
+    if isinstance(value, dict):
+        return {key: _resolve_bindings(item, results) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_resolve_bindings(item, results) for item in value]
+    return value

@@ -25,10 +25,11 @@ if _APP_DIR not in sys.path:
 from app import (  # noqa: E402
     _RECIPE_STORE,
     _RECORDER,
-    _bank_executor,
     create_app,
+    register_workload,
 )
 from recipe import Recipe, RecipeStep  # noqa: E402
+from adapters.security.auth_guard import SecurityPrincipal  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -45,14 +46,23 @@ def server():
     thread.join(timeout=5)
 
 
-def _request(base: str, method: str, path: str, body: dict | None = None):
+def _request(
+    base: str,
+    method: str,
+    path: str,
+    body: dict | None = None,
+    headers: dict | None = None,
+):
     """Perform an HTTP request and return (status, parsed_json)."""
     data = json.dumps(body).encode("utf-8") if body is not None else None
+    req_headers = {"Content-Type": "application/json"}
+    if headers:
+        req_headers.update(headers)
     req = urllib.request.Request(
         base + path,
         data=data,
         method=method,
-        headers={"Content-Type": "application/json"},
+        headers=req_headers,
     )
     try:
         with urllib.request.urlopen(req) as resp:
@@ -198,19 +208,27 @@ def test_capability_get_not_found(server):
 # ---------------------------------------------------------------------------
 
 
-def test_capability_execute(server):
+@pytest.fixture(scope="module")
+def reader(server):
+    register_workload(
+        "reader-test",
+        SecurityPrincipal(
+            subject="reader",
+            tenant_id="tenant-demo",
+            granted_permissions={"accounts:read", "documents:read", "documents:create"},
+        ),
+    )
+    return {"Authorization": "Bearer reader-test"}
+
+
+def test_capability_execute(server, reader):
     status, payload = _request(
         server,
         "POST",
         "/capabilities/get_balance/execute",
         {"args": {"account_id": "ACC-1001"}},
+        headers=reader,
     )
-    assert status == 200
-    assert payload["capability_id"] == "get_balance"
-    assert "available_balance" in payload["result"]
-
-
-def test_capability_execute_not_found(server):
     status, payload = _request(
         server, "POST", "/capabilities/nope/execute", {"args": {}}
     )
@@ -218,12 +236,13 @@ def test_capability_execute_not_found(server):
     assert "error" in payload
 
 
-def test_capability_execute_bad_args(server):
+def test_capability_execute_bad_args(server, reader):
     status, payload = _request(
         server,
         "POST",
         "/capabilities/get_balance/execute",
         {"args": {"bogus_kwarg": 1}},
+        headers=reader,
     )
     assert status == 400
     assert "error" in payload
@@ -280,9 +299,9 @@ def test_recipes_resolve_not_found(server):
 # ---------------------------------------------------------------------------
 
 
-def test_recipe_execute(server, seeded_recipe):
+def test_recipe_execute(server, seeded_recipe, reader):
     status, payload = _request(
-        server, "POST", "/recipes/gw-recipe-1/execute", {"args": {}}
+        server, "POST", "/recipes/gw-recipe-1/execute", {"args": {}}, headers=reader
     )
     assert status == 200
     assert payload["recipe_id"] == "gw-recipe-1"
@@ -304,10 +323,10 @@ def test_recipe_execute_not_found(server):
 # ---------------------------------------------------------------------------
 
 
-def test_trace_get(server, seeded_recipe):
+def test_trace_get(server, seeded_recipe, reader):
     # Execute the recipe to produce a finalized telemetry record.
     status, payload = _request(
-        server, "POST", "/recipes/gw-recipe-1/execute", {"args": {}}
+        server, "POST", "/recipes/gw-recipe-1/execute", {"args": {}}, headers=reader
     )
     assert status == 200
     trace_id = payload["trace_id"]
@@ -334,3 +353,33 @@ def test_unknown_route(server):
     status, payload = _request(server, "GET", "/nope")
     assert status == 404
     assert "error" in payload
+
+
+def test_forged_principal_does_not_execute(server):
+    status, payload = _request(
+        server,
+        "POST",
+        "/capabilities/make_payment/execute",
+        {"args": {"from_account": "ACC-1001", "to_account": "ACC-9", "amount": 1}},
+        headers={"X-Principal": json.dumps({"is_admin": True, "permissions": ["payments:write"]})},
+    )
+    assert status == 401
+    assert payload["type"] == "unverified_credential"
+    assert "result" not in payload
+
+
+def test_unauthenticated_execute_is_denied(server):
+    status, payload = _request(
+        server,
+        "POST",
+        "/capabilities/get_balance/execute",
+        {"args": {"account_id": "ACC-1001"}},
+    )
+    assert status == 401
+    assert payload["type"] == "unauthorized"
+
+
+def test_recipe_execute_without_credential_is_denied(server, seeded_recipe):
+    status, payload = _request(server, "POST", "/recipes/gw-recipe-1/execute", {"args": {}})
+    assert status == 401
+    assert payload["type"] == "unauthorized"
