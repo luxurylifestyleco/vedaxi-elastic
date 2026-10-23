@@ -54,6 +54,7 @@ from adapters.security.auth_guard import (
     AuthorizationGuard,
     SecurityPrincipal,
     PermissionDeniedError,
+    SensitiveActionDeniedError,
 )
 
 import app as gateway_app
@@ -253,12 +254,30 @@ def test_end_to_end_multi_protocol_workflow(webmcp_url):
             },
         )
 
+        invoked = []
+        original_invoke = remote_mcp.invoke
+
+        def _spy_invoke(capability_id, args):
+            invoked.append(capability_id)
+            return original_invoke(capability_id, args)
+
+        remote_mcp.invoke = _spy_invoke
+
         def executor(capability_id, args):
+            if capability_id == cap_payment.id:
+                with pytest.raises(SensitiveActionDeniedError):
+                    gateway_app._unified_executor(
+                        capability_id,
+                        args,
+                        principal=principal,
+                        explicit_approval=True,
+                    )
+                return {"status": "denied", "dispatched": False}
             return gateway_app._unified_executor(
                 capability_id,
                 args,
                 principal=principal,
-                explicit_approval=True,
+                explicit_approval=False,
             )
 
         results = store.execute(
@@ -278,10 +297,11 @@ def test_end_to_end_multi_protocol_workflow(webmcp_url):
         assert "AUDIT-SIG-VALID" in results["step2_compliance"]["audit_token"]
         assert results["step2_compliance"]["delegated_agent"] == "agent.external_risk_auditor"
 
-        # Result 3: Remote MCP tool execution output
+        # Result 3: payment must not reach the remote adapter.
         assert "step3_pay" in results
-        assert results["step3_pay"]["status"] == "pending"
-        assert results["step3_pay"]["amount"] == 4500
+        assert results["step3_pay"]["status"] == "denied"
+        assert results["step3_pay"]["dispatched"] is False
+        assert cap_payment.id not in invoked
 
         # 6. Verify Telemetry trace recorded all steps without credential leakage
         bus.emit("outcome.delivered", trace_id=trace_id, payload={"recipe_id": "recipe.cross_protocol_transfer"})

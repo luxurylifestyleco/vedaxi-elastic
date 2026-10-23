@@ -355,7 +355,9 @@ def test_unknown_route(server):
     assert "error" in payload
 
 
-def test_forged_principal_does_not_execute(server):
+def test_forged_principal_does_not_execute(server, monkeypatch):
+    called = []
+    monkeypatch.setattr("app.bank.make_payment", lambda **kwargs: called.append(kwargs) or {"status": "completed"})
     status, payload = _request(
         server,
         "POST",
@@ -365,6 +367,73 @@ def test_forged_principal_does_not_execute(server):
     )
     assert status == 401
     assert payload["type"] == "unverified_credential"
+    assert "result" not in payload
+    assert called == []
+
+
+def test_caller_approval_flag_does_not_execute(server, monkeypatch):
+    called = []
+    monkeypatch.setattr("app.bank.make_payment", lambda **kwargs: called.append(kwargs) or {"status": "completed"})
+    register_workload(
+        "payer-flag",
+        SecurityPrincipal(
+            subject="payer",
+            tenant_id="tenant-demo",
+            granted_permissions={"payments:write"},
+        ),
+    )
+    status, payload = _request(
+        server,
+        "POST",
+        "/capabilities/make_payment/execute",
+        {"args": {"amount": 1, "payee": "x"}, "approval": True},
+        headers={"Authorization": "Bearer payer-flag"},
+    )
+    assert status == 403
+    assert payload["type"] == "permission_denied"
+    assert "result" not in payload
+    assert called == []
+
+
+def test_approval_bypass_permission_does_not_execute(server, monkeypatch):
+    called = []
+    monkeypatch.setattr("app.bank.make_payment", lambda **kwargs: called.append(kwargs) or {"status": "completed"})
+    register_workload(
+        "payer-bypass",
+        SecurityPrincipal(
+            subject="payer-bypass",
+            tenant_id="tenant-demo",
+            granted_permissions={"payments:write", "approval:bypass"},
+        ),
+    )
+    status, payload = _request(
+        server,
+        "POST",
+        "/capabilities/make_payment/execute",
+        {"args": {"amount": 1, "payee": "x"}, "approval": True},
+        headers={"Authorization": "Bearer payer-bypass"},
+    )
+    assert status == 403
+    assert called == []
+    assert "result" not in payload
+
+
+def test_admin_flag_does_not_execute(server, monkeypatch):
+    called = []
+    monkeypatch.setattr("app.bank.make_payment", lambda **kwargs: called.append(kwargs) or {"status": "completed"})
+    register_workload(
+        "admin-flag",
+        SecurityPrincipal(subject="admin", tenant_id="tenant-demo", is_admin=True),
+    )
+    status, payload = _request(
+        server,
+        "POST",
+        "/capabilities/make_payment/execute",
+        {"args": {"amount": 1, "payee": "x"}},
+        headers={"Authorization": "Bearer admin-flag"},
+    )
+    assert status == 403
+    assert called == []
     assert "result" not in payload
 
 

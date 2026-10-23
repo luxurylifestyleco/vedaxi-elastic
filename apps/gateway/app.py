@@ -300,14 +300,14 @@ def _handle_capability_execute(
         principal = _extract_principal(headers)
     except UnverifiedCredentialError as exc:
         return 401, {"error": str(exc), "type": "unverified_credential"}
-    explicit_approval = body.get("approval") is True
+    # body["approval"] is caller text. It is not approval evidence.
 
     try:
         result = _unified_executor(
             capability_id,
             args,
             principal=principal,
-            explicit_approval=explicit_approval,
+            explicit_approval=False,
         )
     except UnauthorizedError as exc:
         return 401, {"error": str(exc), "type": "unauthorized"}
@@ -351,7 +351,7 @@ def _handle_recipe_execute(
         principal = _extract_principal(headers)
     except UnverifiedCredentialError as exc:
         return 401, {"error": str(exc), "type": "unverified_credential"}
-    explicit_approval = body.get("approval") is True
+    # body["approval"] is caller text. It is not approval evidence.
     trace_id = uuid.uuid4().hex
     _BUS.emit(
         "recipe.retrieved",
@@ -364,7 +364,7 @@ def _handle_recipe_execute(
             capability_id,
             step_args,
             principal=principal,
-            explicit_approval=explicit_approval,
+            explicit_approval=False,
         )
 
     try:

@@ -6,11 +6,44 @@ domain: VEDAXI_ELASTIC
 
 **Scope:** Elastic Web only. Multi-tenant interoperability gateway for independent customer-owned agents, protocols, tools and business systems.
 
+
+## 0. Implementation discipline — binding rules
+
+This section governs how the rest of this document must be interpreted. It does not add new product scope or weaken any security requirement.
+
+### Source of truth and precedence
+
+1. Non-negotiable security invariants in this document are mandatory.
+2. Existing repository architecture, interfaces, and prior recorded project decisions are authoritative wherever they do not violate those invariants.
+3. Phase-specific acceptance gates determine whether a phase is complete.
+4. Work orders are bounded implementation guidance, not permission to rebuild the system.
+5. Examples, sample values, illustrative schemas, and test scenarios explain requirements; they are not production defaults, policy values, feature requests, or instructions to hard-code special cases.
+
+If these sources conflict or a decision cannot be derived safely, identify the conflict and ask for a decision. Do not silently invent behavior.
+
+### Example isolation
+
+- Do not derive production identities, tenants, roles, permissions, approval thresholds, protocol support, business rules, or defaults from examples.
+- Do not implement special-case logic merely to make a named example or test pass.
+- Example transaction amounts in acceptance tests are test inputs, not policy thresholds. Choose expected outcomes only from an existing approved policy or an explicit requirement.
+- Determine supported protocols and execution paths from the actual repository. A protocol named as a possibility is not authorization to add an adapter.
+- Keep test fixtures isolated from production configuration and privilege registration.
+
+### Minimal-change rule
+
+Before changing code, map the relevant existing control flow and identify: (a) the exact violated invariant, (b) the smallest affected code boundary, (c) the minimum change that restores the invariant, and (d) tests that demonstrate the behavior on real controlled paths. Do not redesign unrelated components, implement later phases early, or add infrastructure merely because the target architecture describes it.
+
+For each phase, implement only the gaps required to satisfy that phase's acceptance gate. Preserve existing contracts unless a specific requirement necessitates a change. Do not report a phase complete based only on unit-test counts or on tests that exercise mocks instead of the actual enforcement boundary.
+
+### Approval and privilege safety
+
+No example, test flag, administrative label, internal caller, or registration shortcut may weaken a mandatory security invariant. A caller-supplied boolean is not, by itself, verifiable approval evidence for a protected production operation. Any exception must be explicitly specified, narrowly scoped, auditable, and unable to bypass tenant isolation or other mandatory controls.
+
 ## Execute from the correct folder
 
 Save this file in the **root of the Elastic Web repository**. Open your coding agent in that repository root and give it this instruction:
 
-> Read `ELASTIC_WEB_SECURITY_IMPLEMENTATION.md` completely. Inspect the actual repository before changing anything. Map existing protocols, agent gateways, identity, routing, connectors, authorization, storage and operations. Implement this specification in incremental phases using the current stack. Do not modify unrelated repositories or invent existing capabilities. Before coding, show a file-level implementation plan and trust-boundary diagram. After each phase, report changed files, real test evidence, latency impact and remaining risks. Never deploy, rotate production credentials or change live policies without explicit approval.
+> Read `ELASTIC_WEB_SECURITY_IMPLEMENTATION.md` completely, especially Section 0. Inspect the actual repository and relevant recorded decisions before changing anything. First identify the current phase, its acceptance gate, the exact unmet invariant, and the smallest sufficient change. Show the relevant control-flow trace, trust boundary, file-level plan, and tests before coding. Do not implement the aspirational target architecture wholesale, infer requirements from examples, add optional protocols/adapters, or pull later-phase work into the current phase. Preserve existing architecture and contracts unless a specific mandatory requirement requires a change. After the approved phase, report changed files, tests and whether they exercised real enforcement paths, downstream side-effect evidence, latency measurements where relevant, and remaining risks. Never deploy, rotate production credentials, or change live policies without explicit approval.
 
 ## 1. Non-negotiable boundaries
 
@@ -154,22 +187,22 @@ For each test record request, authenticated principal, decision, actual downstre
 ## 9. Sequential coding-agent work orders
 
 ### Work order A — Repository inspection
-> Audit the Elastic Web repository. Identify actual protocol ingress paths, tenant identity derivation, routing, connector execution, existing policies, database schemas, audit logging and operational controls. Create a threat model, trust-boundary diagram and precise file-by-file implementation plan. Do not assume a capability exists based on documentation alone.
+> Audit the existing Elastic Web repository and relevant recorded decisions. Identify actual protocol ingress paths, tenant identity derivation, routing, connector execution, existing policies, schemas, audit logging and operational controls. Produce a threat model, trust-boundary diagram, and gap matrix mapping each mandatory requirement to evidence. Do not change code in this work order. Do not infer missing features from examples or assume a capability exists based on documentation alone.
 
 ### Work order B — Enforce identity and policy
-> Implement authenticated tenant/workload identity, canonical action envelope, typed deterministic policy engine and mandatory enforcement points across all actual gateway routes and connector execution. Deny unknown actions by default. Demonstrate real negative tests for forged identity, cross-tenant access and unauthorized writes.
+> Implement only the verified Phase 1 gaps needed to satisfy the Phase 1 acceptance gate. Reuse existing components and contracts where possible. Do not introduce a new envelope, policy engine, identity provider, or enforcement layer unless the gap analysis proves it is necessary. Deny unknown actions by default where the gateway controls the action. Demonstrate real negative tests for forged identity, cross-tenant access and unauthorized writes on the actual affected routes and verify no unauthorized downstream effect.
 
 ### Work order C — Secure protocol interoperability
-> Implement registry validation, versioned tool manifests, task-scoped grants and strict delegation subset checks. Preserve authority and identity across each supported protocol adapter. Prove that no protocol translation or multi-hop delegation can increase privileges.
+> Only when Phase 2 is explicitly authorized, implement the verified gaps in registry validation, manifests, task-scoped grants, and delegation for protocols actually supported by the repository. Do not add adapters for merely mentioned protocols. Preserve authority across existing protocol boundaries and prove that tested delegation cannot expand privileges.
 
 ### Work order D — Secure connectors and approvals
-> Implement credential isolation, destination/argument restrictions, idempotency, durable sensitive-operation evidence, transaction-bound approvals and authoritative aggregate limits where applicable. Verify real downstream effects and safe recovery from ambiguous timeouts.
+> Only when Phase 3 is explicitly authorized, implement verified gaps in managed connectors and protected execution. Do not invent transaction thresholds or business policy from test amounts. Use approved policy for limits; treat example amounts as test cases only. Verify operation-bound approval evidence, real downstream effects, idempotency, and safe recovery from ambiguous timeouts.
 
 ### Work order E — Governance and operations
-> Implement verified ownership manifests, incident response, revocation propagation, tenant quotas, secure policy distribution, observability and rollout/rollback controls. Add operational runbooks and prove containment in integration tests.
+> Only when Phase 4 is explicitly authorized, implement verified operational gaps that are in scope. Do not create new governance or infrastructure components without a demonstrated requirement. Add operational runbooks and prove containment in integration tests.
 
 ### Work order F — Performance and independent validation
-> Benchmark realistic multi-tenant workloads at p50/p95/p99, including cold/warm paths, revocation and faults. Conduct adversarial tests against real gateway and connector boundaries. Optimize without skipping security checks. Report measured overhead, exact evidence and unresolved limitations; do not claim readiness solely from unit-test counts.
+> Only when Phase 5 is explicitly authorized, benchmark realistic workloads and conduct adversarial tests against actual gateway and connector boundaries. Optimize without skipping security checks. Report measured overhead, exact reproducible evidence, and unresolved limitations. Do not claim readiness solely from unit-test counts.
 
 ## 10. Expected engineering outputs
 
