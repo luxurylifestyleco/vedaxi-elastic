@@ -66,6 +66,7 @@ from adapters.mcp.remote_mcp import RemoteMCPAdapter  # noqa: E402
 from adapters.a2a.a2a_adapter import A2AAdapter  # noqa: E402
 from adapters.webmcp.webmcp_adapter import WebMCPAdapter  # noqa: E402
 from adapters.webmcp.declarative import DeclarativeWebMCPClient  # noqa: E402
+from adapters.webmcp.browser_client import BrowserWebMCPClient  # noqa: E402
 from adapters.security.auth_guard import (  # noqa: E402
     AuthorizationGuard,
     SecurityPrincipal,
@@ -98,6 +99,7 @@ _REMOTE_MCP_ADAPTERS: Dict[str, RemoteMCPAdapter] = {}
 _A2A_ADAPTERS: Dict[str, A2AAdapter] = {}
 _WEBMCP_ADAPTERS: Dict[str, WebMCPAdapter] = {}
 _DECLARATIVE_WEBMCP: Dict[str, DeclarativeWebMCPClient] = {}
+_BROWSER_WEBMCP: Dict[str, BrowserWebMCPClient] = {}
 _LOCAL_CALLABLES: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
 
 # Registered workloads only. A request header cannot create one of these.
@@ -143,6 +145,15 @@ def register_declarative_webmcp(adapter: DeclarativeWebMCPClient) -> List[Capabi
     for cap in caps:
         _DYNAMIC_CAPABILITIES[cap.id] = cap
         _DECLARATIVE_WEBMCP[cap.id] = adapter
+    return caps
+
+
+def register_browser_webmcp(adapter: BrowserWebMCPClient) -> List[Capability]:
+    """Register document tools discovered over Chrome WebMCP CDP."""
+    caps = adapter.discover()
+    for cap in caps:
+        _DYNAMIC_CAPABILITIES[cap.id] = cap
+        _BROWSER_WEBMCP[cap.id] = adapter
     return caps
 
 
@@ -208,6 +219,13 @@ def _unified_executor(
         res = _DECLARATIVE_WEBMCP[capability_id].invoke(capability_id, args)
         if not res.success:
             raise RuntimeError(res.error or "Declarative WebMCP form failed")
+        return res.result
+
+    # Dispatch to browser-document WebMCP (Chrome CDP). Auth already checked above.
+    if capability_id in _BROWSER_WEBMCP:
+        res = _BROWSER_WEBMCP[capability_id].invoke(capability_id, args)
+        if not res.success:
+            raise RuntimeError(res.error or "Browser WebMCP execution failed")
         return res.result
 
     if capability_id in _LOCAL_CALLABLES:
