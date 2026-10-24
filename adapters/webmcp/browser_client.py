@@ -36,6 +36,25 @@ _CHROME_DEFAULT = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
+def resolve_chrome(explicit: Optional[str] = None) -> Optional[str]:
+    """Return a Chrome binary that exists on this machine, or None."""
+    candidates = []
+    if explicit:
+        candidates.append(explicit)
+    env = os.environ.get("CHROME_PATH")
+    if env:
+        candidates.append(env)
+    candidates.append(_CHROME_DEFAULT)
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome"):
+        found = shutil.which(name)
+        if found:
+            candidates.append(found)
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
 class BrowserWebMCPError(Exception):
     """Raised when Chrome or the WebMCP CDP domain fails."""
 
@@ -51,7 +70,7 @@ class BrowserWebMCPClient:
         provider: str = "webmcp-browser",
     ) -> None:
         self.page_url = page_url
-        self.chrome_path = chrome_path or os.environ.get("CHROME_PATH") or _CHROME_DEFAULT
+        self.chrome_path = resolve_chrome(chrome_path) or chrome_path or _CHROME_DEFAULT
         self.timeout = timeout
         self.provider = provider
         self._proc: Optional[subprocess.Popen] = None

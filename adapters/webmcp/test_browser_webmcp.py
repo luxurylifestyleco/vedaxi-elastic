@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 
@@ -19,7 +18,7 @@ for _p in (
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from adapters.webmcp.browser_client import BrowserWebMCPClient
+from adapters.webmcp.browser_client import BrowserWebMCPClient, resolve_chrome
 
 
 def _spawn_page():
@@ -39,17 +38,10 @@ def _spawn_page():
     return proc, int(line.split("=", 1)[1].strip())
 
 
-def _chrome_present() -> bool:
-    configured = os.environ.get("CHROME_PATH")
-    if configured and os.path.isfile(configured):
-        return True
-    if os.path.isfile(r"C:\Program Files\Google\Chrome\Application\chrome.exe"):
-        return True
-    return bool(shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chrome"))
-
-
 def test_browser_webmcp_discovers_and_invokes_document_tools():
-    if not _chrome_present():
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        pytest.skip("GitHub Actions has no headed WebMCP session; local Chrome is the proof")
+    if resolve_chrome() is None:
         pytest.skip("headed Chrome is not on this machine; WebMCP is not claimed")
     page = None
     client = None
