@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elastic Web · Customer setup</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0a0d12; --panel:#111722; --line:#273243; --muted:#8d9aad; --text:#f4f7fb; --accent:#7ee7c4; --warn:#f7c66b; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at 80% 0,#19362f 0,transparent 38%),var(--bg); color:var(--text); font:15px/1.5 Inter,ui-sans-serif,system-ui,sans-serif; }
+    main { width:min(980px,calc(100% - 32px)); margin:0 auto; padding:56px 0 80px; }
+    .eyebrow { color:var(--accent); letter-spacing:.14em; text-transform:uppercase; font-size:12px; font-weight:700; }
+    h1 { margin:10px 0 8px; font-size:clamp(34px,6vw,64px); line-height:1; letter-spacing:-.05em; }
+    h2 { margin:0 0 8px; font-size:20px; }
+    p { color:var(--muted); margin:0 0 20px; }
+    .steps { display:flex; gap:8px; margin:32px 0 20px; }
+    .step { flex:1; border-top:2px solid var(--line); padding-top:10px; color:var(--muted); font-size:12px; }
+    .step.active { border-color:var(--accent); color:var(--text); }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .card { background:color-mix(in srgb,var(--panel) 92%,transparent); border:1px solid var(--line); border-radius:16px; padding:20px; }
+    label.option { display:block; cursor:pointer; border:1px solid var(--line); border-radius:12px; padding:14px; margin:10px 0; }
+    label.option:has(input:checked) { border-color:var(--accent); background:#10251f; }
+    label.option input { accent-color:var(--accent); margin-right:8px; }
+    .option strong { display:block; margin-top:6px; }
+    .option small { display:block; color:var(--muted); margin:4px 0 0 24px; }
+    .actions { display:flex; gap:10px; margin-top:18px; }
+    button { border:0; border-radius:999px; padding:12px 18px; cursor:pointer; font-weight:700; background:var(--accent); color:#082018; }
+    button.secondary { background:transparent; color:var(--text); border:1px solid var(--line); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    #preview, #result { margin-top:18px; white-space:pre-wrap; }
+    .metric { font-size:32px; font-weight:800; color:var(--accent); }
+    .notice { border-left:3px solid var(--warn); padding:10px 14px; color:#f8dda3; background:#241e10; margin-top:20px; }
+    code { color:var(--accent); }
+    @media (max-width:760px) { .grid { grid-template-columns:1fr; } main { padding-top:32px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Elastic Web · Customer onboarding</div>
+  <h1>Ready in three deliberate clicks.</h1>
+  <p>Choose how your agents should operate, choose where they run, preview the exact CRUD boundary, then approve the setup plan.</p>
+  <div class="steps"><div class="step active">01 · Profile</div><div class="step active">02 · Connection + host</div><div class="step active">03 · Preview + approve</div></div>
+  <section class="grid">
+    <div class="card"><h2>1. Agent authority</h2><p>Start narrow. Deletes are always visible in the preview.</p>
+      <label class="option"><input type="radio" name="profile" value="read_only" /> <strong>Read only</strong><small>Inspect data and run safe tasks.</small></label>
+      <label class="option"><input type="radio" name="profile" value="operations" checked /> <strong>Operations</strong><small>Read, create, and update; deletes stay gated.</small></label>
+      <label class="option"><input type="radio" name="profile" value="full_control" /> <strong>Full control</strong><small>All declared CRUD actions.</small></label>
+    </div>
+    <div class="card"><h2>2. Connect and host</h2><p>These are deployment choices, not credentials.</p>
+      <label class="option"><input type="radio" name="source" value="demo" checked /> <strong>Demo capabilities</strong><small>Learn the boundary with the safe local manifest.</small></label>
+      <label class="option"><input type="radio" name="source" value="api" /> <strong>API tools</strong><small>Import your declared API surface later.</small></label>
+      <label class="option"><input type="radio" name="source" value="mcp" /> <strong>MCP tools</strong><small>Import your agent tools later.</small></label>
+      <select id="host" style="width:100%;padding:12px;background:#0a0d12;color:var(--text);border:1px solid var(--line);border-radius:10px">
+        <option value="managed">Elastic Web managed runtime</option><option value="bring_your_agent">Bring your agent</option><option value="self_hosted">Self-hosted gateway</option>
+      </select>
+    </div>
+    <div class="card"><h2>3. Review and approve</h2><p>Nothing is provisioned by this public demo. It produces a deterministic setup plan.</p>
+      <div class="metric" id="allowed">—</div><div>capabilities allowed by this policy</div>
+      <div class="actions"><button id="previewBtn">Preview policy</button><button id="approveBtn" disabled>Approve setup</button></div>
+      <div id="preview"></div><div id="result"></div>
+    </div>
+  </section>
+  <div class="notice"><strong>Safety boundary:</strong> this surface returns <code>demo_plan_only</code>. Production IdP, tenant, secret, connector, and RLS changes must be completed by the private control plane.</div>
+</main>
+<script>
+  let latest = null;
+  const val = name => document.querySelector(`input[name="${name}"]:checked`).value;
+  const config = () => ({ profile: val('profile'), source: val('source'), host: document.getElementById('host').value });
+  const previewBtn = document.getElementById('previewBtn');
+  const approveBtn = document.getElementById('approveBtn');
+  const previewEl = document.getElementById('preview');
+  const resultEl = document.getElementById('result');
+  previewBtn.onclick = async () => {
+    resultEl.textContent = '';
+    const response = await fetch('/api/onboarding/preview', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(config()) });
+    latest = await response.json();
+    if (!response.ok) { previewEl.textContent = latest.error || 'Preview failed'; approveBtn.disabled = true; return; }
+    document.getElementById('allowed').textContent = latest.allowed_capabilities;
+    previewEl.textContent = `${latest.profile.label} · ${latest.host.label}\n${latest.total_capabilities} declared · ${latest.approval_required.length} delete approvals visible\nDraft ${latest.draft_id}`;
+    approveBtn.disabled = false;
+  };
+  approveBtn.onclick = async () => {
+    if (!latest) return;
+    const response = await fetch('/api/onboarding/activate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...config(), confirm:true}) });
+    const result = await response.json();
+    resultEl.textContent = response.ok ? `Setup plan ready\nWorkspace ${result.workspace_id}\n${result.next_steps.join('\n')}` : (result.error || 'Approval failed');
+  };
+</script>
+</body>
+</html>

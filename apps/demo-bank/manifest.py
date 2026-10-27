@@ -319,6 +319,31 @@ _MANIFEST: List[tuple] = [
 ]
 
 
+def _crud_metadata(func_name: str, permissions: List[str]) -> Dict[str, str]:
+    """Attach an explicit CRUD action to each capability without changing the schema.
+
+    Legacy ``resource:write`` grants remain accepted by the guard, but the
+    discovered capability now declares the narrower operation it performs.
+    """
+    exact = {"create", "read", "update", "delete"}
+    for permission in permissions:
+        if ":" in permission and permission.rsplit(":", 1)[1] in exact:
+            resource, action = permission.rsplit(":", 1)
+            return {"crud_resource": resource, "crud_action": action}
+    mutation = next((p for p in permissions if p.endswith(":write")), None)
+    if mutation is None:
+        return {}
+    resource = mutation.rsplit(":", 1)[0]
+    name = func_name.lower()
+    if any(word in name for word in ("cancel", "delete", "remove")):
+        action = "delete"
+    elif any(word in name for word in ("update", "change", "set_", "freeze", "replace", "pin", "renew", "prepay", "activate", "report_")):
+        action = "update"
+    else:
+        action = "create"
+    return {"crud_resource": resource, "crud_action": action}
+
+
 def build_manifest() -> List[Capability]:
     """Build a :class:`Capability` for every bank function in the manifest.
 
@@ -345,7 +370,12 @@ def build_manifest() -> List[Capability]:
                 estimated_latency=60,
                 estimated_cost=0.002,
                 historical_success=0.98,
-                metadata={"tags": [domain, func_name], "version": "1.0", "source": "demo-bank"},
+                metadata={
+                    "tags": [domain, func_name],
+                    "version": "1.0",
+                    "source": "demo-bank",
+                    **_crud_metadata(func_name, permissions),
+                },
             )
         )
     return caps

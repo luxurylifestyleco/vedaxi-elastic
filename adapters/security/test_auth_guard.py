@@ -25,6 +25,7 @@ from adapters.security.auth_guard import (
     CredentialsExpiredError,
     PermissionDeniedError,
     SensitiveActionDeniedError,
+    CrudAction,
 )
 from capability import Capability
 
@@ -117,3 +118,36 @@ def test_admin_flag_does_not_bypass(sensitive_cap):
     admin_user = SecurityPrincipal(subject="admin_user", is_admin=True)
     with pytest.raises(PermissionDeniedError):
         guard.check(sensitive_cap, principal=admin_user, explicit_approval=False)
+
+
+def test_crud_policy_requires_exact_read_permission():
+    guard = AuthorizationGuard()
+    cap = Capability(
+        id="read_profile", name="Read Profile", description="Read a profile",
+        domain="profile", permissions=["profile:read"],
+        metadata={"crud_action": CrudAction.READ.value},
+    )
+    guard.check(cap, SecurityPrincipal(subject="reader", granted_permissions={"profile:read"}))
+    with pytest.raises(PermissionDeniedError):
+        guard.check(cap, SecurityPrincipal(subject="writer", granted_permissions={"profile:write"}))
+
+
+def test_crud_mutation_accepts_exact_action_or_legacy_write():
+    guard = AuthorizationGuard()
+    cap = Capability(
+        id="create_ticket", name="Create Ticket", description="Create a ticket",
+        domain="support", permissions=["support:write"],
+        metadata={"crud_action": CrudAction.CREATE.value},
+    )
+    guard.check(cap, SecurityPrincipal(subject="exact", granted_permissions={"support:write", "support:create"}))
+    guard.check(cap, SecurityPrincipal(subject="legacy", granted_permissions={"support:write"}))
+
+
+def test_invalid_crud_policy_fails_closed():
+    guard = AuthorizationGuard()
+    cap = Capability(
+        id="bad", name="Bad", description="Bad policy", domain="support",
+        permissions=["support:read"], metadata={"crud_action": "list"},
+    )
+    with pytest.raises(PermissionDeniedError, match="invalid CRUD policy"):
+        guard.check(cap, SecurityPrincipal(subject="user", granted_permissions={"support:read"}))

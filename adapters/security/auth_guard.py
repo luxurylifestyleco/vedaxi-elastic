@@ -63,6 +63,15 @@ class Decision(str, Enum):
     REQUIRE_APPROVAL = "REQUIRE_APPROVAL"
 
 
+class CrudAction(str, Enum):
+    """The four resource operations controlled by the gateway policy."""
+
+    CREATE = "create"
+    READ = "read"
+    UPDATE = "update"
+    DELETE = "delete"
+
+
 @dataclass
 class PolicyDecision:
     """Typed local policy result. No model call."""
@@ -122,6 +131,10 @@ class AuthorizationGuard:
             raise SensitiveActionDeniedError(
                 f"Capability '{capability.id}' involves sensitive side effects or external mutations. Explicit approval required."
             )
+        if outcome.reason == "invalid_crud_policy":
+            raise PermissionDeniedError(
+                f"Capability '{capability.id}' has an invalid CRUD policy declaration"
+            )
         if outcome.reason == "unauthenticated":
             raise UnauthorizedError(
                 f"Capability '{capability.id}' requires authentication with permissions: {sorted(capability.permissions or [])}"
@@ -145,6 +158,9 @@ class AuthorizationGuard:
         """Return ALLOW, DENY, or REQUIRE_APPROVAL. Caller text is not an input."""
         caller = principal or self.default_principal
         required = set(capability.permissions or [])
+        crud_permission, crud_error = self._crud_permission(capability)
+        if crud_error:
+            return PolicyDecision(Decision.DENY, crud_error)
         sensitive = self._is_sensitive(capability)
         target_tenant = (capability.metadata or {}).get("tenant_id")
 
@@ -157,12 +173,44 @@ class AuthorizationGuard:
         if target_tenant and caller.tenant_id != target_tenant:
             return PolicyDecision(Decision.DENY, "cross_tenant")
         missing = required - caller.granted_permissions
+        if crud_permission and not self._has_crud_permission(
+            crud_permission, caller.granted_permissions
+        ):
+            missing.add(crud_permission)
         if missing:
             return PolicyDecision(Decision.DENY, "missing_permission")
         # A caller boolean and a permission string are not approval evidence.
         if sensitive:
             return PolicyDecision(Decision.REQUIRE_APPROVAL, "approval_required")
         return PolicyDecision(Decision.ALLOW, "permitted")
+
+    @staticmethod
+    def _crud_permission(capability: Capability) -> tuple[Optional[str], Optional[str]]:
+        """Resolve explicit CRUD metadata without trusting caller input.
+
+        ``metadata.crud_action`` is an operator-authored policy declaration.
+        The resource defaults to the first domain segment, so existing
+        manifests can opt in without adding a second capability schema.
+        """
+        metadata = getattr(capability, "metadata", {}) or {}
+        action = metadata.get("crud_action")
+        if action is None:
+            return None, None
+        if not isinstance(action, str) or action not in {item.value for item in CrudAction}:
+            return None, "invalid_crud_policy"
+        resource = metadata.get("crud_resource") or str(getattr(capability, "domain", "")).split("/", 1)[0]
+        if not isinstance(resource, str) or not resource.strip() or ":" in resource:
+            return None, "invalid_crud_policy"
+        return f"{resource.strip()}:{action}", None
+
+    @staticmethod
+    def _has_crud_permission(required: str, granted: Set[str]) -> bool:
+        resource, action = required.rsplit(":", 1)
+        if required in granted:
+            return True
+        # Compatibility for the existing resource:write vocabulary. It is
+        # deliberately mutation-only; it can never grant read access.
+        return action != CrudAction.READ.value and f"{resource}:write" in granted
 
     @staticmethod
     def _is_sensitive(capability: Capability) -> bool:
@@ -172,6 +220,9 @@ class AuthorizationGuard:
         meta = getattr(capability, "metadata", {}) or {}
 
         if meta.get("sensitive") is True or meta.get("external_side_effect") is True:
+            return True
+
+        if meta.get("crud_action") == CrudAction.DELETE.value:
             return True
 
         # Specific high-risk financial domains/actions

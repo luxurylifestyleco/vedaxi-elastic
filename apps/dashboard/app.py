@@ -18,6 +18,7 @@ Default port is 8500 (configurable via DASHBOARD_PORT).
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import sqlite3
@@ -723,6 +724,118 @@ def _handle_topology() -> Tuple[int, Dict[str, Any]]:
     }
 
 
+_ONBOARDING_PROFILES: Dict[str, Dict[str, Any]] = {
+    "read_only": {
+        "label": "Read only",
+        "allowed_actions": ["read"],
+        "description": "Inspect data and run non-mutating agent tasks.",
+    },
+    "operations": {
+        "label": "Operations",
+        "allowed_actions": ["read", "create", "update"],
+        "description": "Run normal workflows; deletes remain approval-gated.",
+    },
+    "full_control": {
+        "label": "Full control",
+        "allowed_actions": ["read", "create", "update", "delete"],
+        "description": "Allow all declared CRUD actions for an explicitly trusted agent.",
+    },
+}
+
+_ONBOARDING_HOSTS: Dict[str, Dict[str, Any]] = {
+    "managed": {
+        "label": "Elastic Web managed",
+        "description": "Elastic Web hosts the agent runtime and keeps policy enforcement in the gateway.",
+    },
+    "bring_your_agent": {
+        "label": "Bring your agent",
+        "description": "Keep your existing agent and point it at the Elastic Web gateway.",
+    },
+    "self_hosted": {
+        "label": "Self-hosted gateway",
+        "description": "Run the gateway in your environment and connect it to the Elastic Web control plane.",
+    },
+}
+
+
+def _onboarding_capabilities(profile_id: str) -> List[Dict[str, Any]]:
+    """Build a deterministic, non-secret CRUD plan from the trusted manifest."""
+    allowed = set(_ONBOARDING_PROFILES[profile_id]["allowed_actions"])
+    planned: List[Dict[str, Any]] = []
+    for cap in _MANIFEST:
+        metadata = cap.metadata or {}
+        action = metadata.get("crud_action")
+        resource = metadata.get("crud_resource")
+        if action not in {"create", "read", "update", "delete"} or not isinstance(resource, str):
+            continue
+        planned.append({
+            "id": cap.id,
+            "name": cap.name,
+            "resource": resource,
+            "action": action,
+            "allowed": action in allowed,
+            "approval_required": action == "delete",
+        })
+    return planned
+
+
+def _onboarding_preview(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    profile_id = body.get("profile", "operations")
+    source = body.get("source", "demo")
+    host = body.get("host", "managed")
+    if profile_id not in _ONBOARDING_PROFILES:
+        return 400, {"error": "profile must be read_only, operations, or full_control"}
+    if source not in {"demo", "api", "mcp"}:
+        return 400, {"error": "source must be demo, api, or mcp"}
+    if host not in _ONBOARDING_HOSTS:
+        return 400, {"error": "host must be managed, bring_your_agent, or self_hosted"}
+
+    capabilities = _onboarding_capabilities(profile_id)
+    fingerprint = json.dumps(
+        {"profile": profile_id, "source": source, "host": host,
+         "capability_ids": [cap["id"] for cap in capabilities]},
+        sort_keys=True,
+    ).encode("utf-8")
+    draft_id = hashlib.sha256(fingerprint).hexdigest()[:16]
+    allowed = [cap for cap in capabilities if cap["allowed"]]
+    return 200, {
+        "status": "preview",
+        "draft_id": draft_id,
+        "profile": {"id": profile_id, **_ONBOARDING_PROFILES[profile_id]},
+        "source": source,
+        "host": {"id": host, **_ONBOARDING_HOSTS[host]},
+        "total_capabilities": len(capabilities),
+        "allowed_capabilities": len(allowed),
+        "approval_required": [cap for cap in capabilities if cap["approval_required"] and cap["allowed"]],
+        "capabilities": capabilities,
+        "provisioning": "demo_plan_only",
+        "policy_version": "crud-onboarding-v1",
+    }
+
+
+def _onboarding_activate(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    if body.get("confirm") is not True:
+        return 400, {"error": "explicit confirmation is required before activating the setup plan"}
+    status, preview = _onboarding_preview(body)
+    if status != 200:
+        return status, preview
+    return 200, {
+        "status": "ready",
+        "workspace_id": f"ws_{preview['draft_id']}",
+        "draft_id": preview["draft_id"],
+        "profile": preview["profile"],
+        "source": preview["source"],
+        "host": preview["host"],
+        "policy_version": preview["policy_version"],
+        "provisioning": "demo_plan_only",
+        "next_steps": [
+            "Connect the customer IdP in the private control plane.",
+            "Replace demo grants with tenant-scoped exact CRUD grants.",
+            "Run the live RLS and approval acceptance suite before production.",
+        ],
+    }
+
+
 def _handle_intent_compile(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     text = body.get("text") or body.get("intent")
     strict = bool(body.get("strict", False))
@@ -1030,6 +1143,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json(404, {"error": "index.html not found"})
             return
 
+        if path == "/onboarding":
+            onboarding_file = os.path.join(_DASHBOARD_DIR, "onboarding.html")
+            if os.path.exists(onboarding_file):
+                with open(onboarding_file, "r", encoding="utf-8") as fh:
+                    self._send_html(fh.read())
+            else:
+                self._send_json(404, {"error": "onboarding.html not found"})
+            return
+
         # Health probe
         if path == "/health":
             status, payload = _handle_health()
@@ -1092,6 +1214,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if path == "/api/execute":
             status, payload = _handle_execute(body)
+            self._send_json(status, payload)
+            return
+
+        if path == "/api/onboarding/preview":
+            status, payload = _onboarding_preview(body)
+            self._send_json(status, payload)
+            return
+
+        if path == "/api/onboarding/activate":
+            status, payload = _onboarding_activate(body)
             self._send_json(status, payload)
             return
 

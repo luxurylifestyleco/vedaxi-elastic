@@ -56,6 +56,42 @@ def test_dashboard_html_served(server: str):
         assert "Elastic Web" in content
 
 
+def test_onboarding_html_served(server: str):
+    with urlopen(f"{server}/onboarding") as response:
+        assert response.status == 200
+        content = response.read().decode("utf-8")
+        assert "Ready in three deliberate clicks" in content
+        assert "Preview policy" in content
+        assert "Approve setup" in content
+
+
+def test_onboarding_preview_returns_crud_plan(server: str):
+    req = Request(
+        f"{server}/api/onboarding/preview",
+        data=json.dumps({"profile": "operations", "source": "demo", "host": "managed"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with urlopen(req) as response:
+        assert response.status == 200
+        data = json.loads(response.read().decode("utf-8"))
+        assert data["status"] == "preview"
+        assert data["provisioning"] == "demo_plan_only"
+        assert data["profile"]["id"] == "operations"
+        assert data["allowed_capabilities"] > 0
+        assert all("resource" in cap and "action" in cap for cap in data["capabilities"])
+
+
+def test_onboarding_activation_requires_confirmation(server: str):
+    req = Request(
+        f"{server}/api/onboarding/activate",
+        data=json.dumps({"profile": "operations", "source": "demo", "host": "managed"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with pytest.raises(HTTPError) as error:
+        urlopen(req)
+    assert error.value.code == 400
+
+
 def test_api_capabilities(server: str):
     url = f"{server}/api/capabilities"
     with urlopen(url) as response:
