@@ -172,7 +172,13 @@ class AuthorizationGuard:
             return PolicyDecision(Decision.DENY, "expired")
         if target_tenant and caller.tenant_id != target_tenant:
             return PolicyDecision(Decision.DENY, "cross_tenant")
-        missing = required - caller.granted_permissions
+        missing = {
+            permission
+            for permission in required
+            if not self._has_required_permission(
+                permission, caller.granted_permissions, crud_permission
+            )
+        }
         if crud_permission and not self._has_crud_permission(
             crud_permission, caller.granted_permissions
         ):
@@ -211,6 +217,23 @@ class AuthorizationGuard:
         # Compatibility for the existing resource:write vocabulary. It is
         # deliberately mutation-only; it can never grant read access.
         return action != CrudAction.READ.value and f"{resource}:write" in granted
+
+    @staticmethod
+    def _has_required_permission(
+        required: str, granted: Set[str], crud_permission: Optional[str]
+    ) -> bool:
+        """Match ordinary grants while allowing exact CRUD migration safely.
+
+        A trusted CRUD declaration may replace a legacy ``resource:write``
+        requirement only for its own matching mutation. It never broadens a
+        read grant or satisfies an unrelated permission.
+        """
+        if required in granted:
+            return True
+        if not crud_permission or not required.endswith(":write"):
+            return False
+        resource, action = crud_permission.rsplit(":", 1)
+        return action != CrudAction.READ.value and required == f"{resource}:write" and crud_permission in granted
 
     @staticmethod
     def _is_sensitive(capability: Capability) -> bool:

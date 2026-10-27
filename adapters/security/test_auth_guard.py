@@ -139,8 +139,24 @@ def test_crud_mutation_accepts_exact_action_or_legacy_write():
         domain="support", permissions=["support:write"],
         metadata={"crud_action": CrudAction.CREATE.value},
     )
-    guard.check(cap, SecurityPrincipal(subject="exact", granted_permissions={"support:write", "support:create"}))
+    guard.check(cap, SecurityPrincipal(subject="exact", granted_permissions={"support:create"}))
     guard.check(cap, SecurityPrincipal(subject="legacy", granted_permissions={"support:write"}))
+
+
+@pytest.mark.parametrize("action", [CrudAction.CREATE.value, CrudAction.UPDATE.value, CrudAction.DELETE.value])
+def test_exact_mutation_grant_satisfies_legacy_requirement(action):
+    guard = AuthorizationGuard()
+    cap = Capability(
+        id=f"{action}_ticket", name=action.title(), description="Mutate a ticket",
+        domain="support", permissions=["support:write"],
+        metadata={"crud_resource": "support", "crud_action": action},
+    )
+    principal = SecurityPrincipal(subject="exact", granted_permissions={f"support:{action}"})
+    if action == CrudAction.DELETE.value:
+        with pytest.raises(SensitiveActionDeniedError):
+            guard.check(cap, principal)
+    else:
+        guard.check(cap, principal)
 
 
 def test_invalid_crud_policy_fails_closed():
