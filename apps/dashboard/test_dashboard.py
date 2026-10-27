@@ -62,7 +62,38 @@ def test_onboarding_html_served(server: str):
         content = response.read().decode("utf-8")
         assert "Ready in three deliberate clicks" in content
         assert "Preview policy" in content
-        assert "Approve setup" in content
+        assert "Generate demo plan" in content
+
+
+def test_public_execution_is_disabled(server: str):
+    req = Request(
+        f"{server}/api/execute",
+        data=json.dumps({"capability": "make_payment", "args": {"amount": 1}}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with pytest.raises(HTTPError) as error:
+        urlopen(req)
+    assert error.value.code == 410
+
+
+def test_onboarding_activation_is_preview_only(server: str):
+    req = Request(
+        f"{server}/api/onboarding/activate",
+        data=json.dumps({"profile": "operations", "source": "demo", "host": "managed", "confirm": True}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with urlopen(req) as response:
+        data = json.loads(response.read().decode("utf-8"))
+        assert data["status"] == "preview_only"
+        assert data["plan_id"].startswith("plan_")
+        assert "workspace_id" not in data
+
+
+def test_options_does_not_enable_cross_origin_access(server: str):
+    req = Request(f"{server}/api/execute", method="OPTIONS")
+    with pytest.raises(HTTPError) as error:
+        urlopen(req)
+    assert error.value.code == 405
 
 
 def test_onboarding_preview_returns_crud_plan(server: str):

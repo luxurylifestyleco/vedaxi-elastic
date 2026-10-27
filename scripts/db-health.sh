@@ -5,7 +5,7 @@
 # server version, pgvector availability, and table presence/counts.
 #
 # Usage:  ./scripts/db-health.sh
-# Env:    PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE (all optional, sane
+# Env:    PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE (PGPASSWORD is required;
 #         defaults below).
 # ============================================================================
 set -euo pipefail
@@ -14,7 +14,7 @@ PSQL="${PSQL:-/c/Program Files/PostgreSQL/16/bin/psql.exe}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
 PGUSER="${PGUSER:-postgres}"
-PGPASSWORD="${PGPASSWORD:-postgres}"
+: "${PGPASSWORD:?PGPASSWORD must be set; refusing a default database password}"
 PGDATABASE="${PGDATABASE:-elastic_web}"
 
 export PGPASSWORD

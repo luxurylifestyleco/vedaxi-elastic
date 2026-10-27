@@ -38,7 +38,7 @@
 <main>
   <div class="eyebrow">Elastic Web · Customer onboarding</div>
   <h1>Ready in three deliberate clicks.</h1>
-  <p>Choose how your agents should operate, choose where they run, preview the exact CRUD boundary, then approve the setup plan.</p>
+  <p>Choose how your agents should operate, choose where they run, and generate a deterministic demo plan.</p>
   <div class="steps"><div class="step active">01 · Profile</div><div class="step active">02 · Connection + host</div><div class="step active">03 · Preview + approve</div></div>
   <section class="grid">
     <div class="card"><h2>1. Agent authority</h2><p>Start narrow. Deletes are always visible in the preview.</p>
@@ -56,7 +56,7 @@
     </div>
     <div class="card"><h2>3. Review and approve</h2><p>Nothing is provisioned by this public demo. It produces a deterministic setup plan.</p>
       <div class="metric" id="allowed">—</div><div>capabilities allowed by this policy</div>
-      <div class="actions"><button id="previewBtn">Preview policy</button><button id="approveBtn" disabled>Approve setup</button></div>
+      <div class="actions"><button id="previewBtn">Preview policy</button><button id="approveBtn" disabled>Generate demo plan</button></div>
       <div id="preview"></div><div id="result"></div>
     </div>
   </section>
@@ -83,7 +83,7 @@
     if (!latest) return;
     const response = await fetch('/api/onboarding/activate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...config(), confirm:true}) });
     const result = await response.json();
-    resultEl.textContent = response.ok ? `Setup plan ready\nWorkspace ${result.workspace_id}\n${result.next_steps.join('\n')}` : (result.error || 'Approval failed');
+    resultEl.textContent = response.ok ? `Demo plan ready\nPlan ${result.plan_id}\n${result.next_steps.join('\n')}` : (result.error || 'Plan generation failed');
   };
 </script>
 </body>

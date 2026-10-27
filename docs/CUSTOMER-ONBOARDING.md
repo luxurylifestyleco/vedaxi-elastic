@@ -15,7 +15,7 @@ The public dashboard is a safe planning surface. It returns `provisioning: demo_
 1. **Authority profile** — `read_only`, `operations`, or `full_control`. The selected profile is translated into exact CRUD actions from the trusted capability manifest.
 2. **Connection and hosting** — choose `demo`, `api`, or `mcp` as the tool source, then choose `managed`, `bring_your_agent`, or `self_hosted` as the runtime model.
 3. **Policy preview** — show every declared capability, resource, action, allowed state, and delete approval requirement.
-4. **Approval result** — issue a deterministic draft/workspace identifier and a short list of private-control-plane steps.
+4. **Plan result** - issue a deterministic draft/plan identifier and a short list of private-control-plane steps. This public surface never provisions a workspace.
 
 The customer should not enter secrets into this public page. Identity-provider setup, connector credentials, tenant binding, and production database policy belong in the private control plane.
 
@@ -34,6 +34,6 @@ Hosting changes placement and operational ownership; it must not weaken the poli
 ## API contract
 
 - `POST /api/onboarding/preview` accepts `profile`, `source`, and `host` and returns a deterministic `draft_id`, the capability CRUD plan, and counts.
-- `POST /api/onboarding/activate` accepts the same fields plus `confirm: true` and returns a `workspace_id` and private-control-plane next steps.
+- `POST /api/onboarding/activate` accepts the same fields plus `confirm: true` and returns `status: preview_only`, a `plan_id`, and private-control-plane next steps.
 
 Production implementation must replace the demo response with an idempotent tenant-provisioning transaction, bind all grants to `tenant_id`, issue short-lived scoped credentials, and run the live RLS/approval acceptance suite before enabling execution.

@@ -9,7 +9,7 @@
 # Idempotent: safe to run repeatedly.
 #
 # Usage:  ./scripts/db-init.sh
-# Env:    PGHOST, PGPORT, PGUSER, PGPASSWORD (optional, sane defaults below).
+# Env:    PGHOST, PGPORT, PGUSER, PGPASSWORD (PGPASSWORD is required).
 # ============================================================================
 set -euo pipefail
 
@@ -29,7 +29,7 @@ PSQL="${PSQL:-/c/Program Files/PostgreSQL/16/bin/psql.exe}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
 PGUSER="${PGUSER:-postgres}"
-PGPASSWORD="${PGPASSWORD:-postgres}"
+: "${PGPASSWORD:?PGPASSWORD must be set; refusing a default database password}"
 PGDATABASE="${PGDATABASE:-elastic_web}"
 
 export PGPASSWORD
