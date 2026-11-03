@@ -88,6 +88,17 @@ _DOCUMENT_RULES: List[tuple] = [
     ),
 ]
 
+_COMMERCE_RULES: List[tuple] = [
+    (
+        re.compile(r"\b(search|find|browse)\b.*\b(product|products|catalog|shoes?)\b", re.IGNORECASE),
+        "products",
+        "commerce",
+        "search",
+        "search_catalog",
+        "json",
+    ),
+]
+
 
 class RuleBasedCompiler(IntentCompiler):
     """Simple, deterministic rule-based Intent IR compiler.
@@ -104,6 +115,24 @@ class RuleBasedCompiler(IntentCompiler):
             raise ValueError("cannot compile empty text")
 
         lowered = text.lower()
+
+        for pattern, obj, domain, action, goal, output in _COMMERCE_RULES:
+            if pattern.search(lowered):
+                return IntentIR(
+                    intent_id=IntentIR.new_id(),
+                    goal=goal,
+                    domain=domain,
+                    action=action,
+                    object=obj,
+                    constraints={},
+                    context={"source_text": text.strip()},
+                    desired_output=output,
+                    authority={},
+                    disclosure={},
+                    success_conditions=["catalog products delivered as json"],
+                    confidence=0.9,
+                    metadata={"compiler": "rule-based", "version": "0.1.0"},
+                )
 
         # Match a known document pattern.
         for pattern, obj, domain, action, goal, output in _DOCUMENT_RULES:

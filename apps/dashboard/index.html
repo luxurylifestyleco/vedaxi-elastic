@@ -275,6 +275,20 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     }
 
+    /* Assurance / Mission Control */
+    .assurance-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem; }
+    .assurance-summary-card, .assurance-card { background: rgba(14, 19, 31, 0.72); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 1rem; }
+    .assurance-summary-card .stat-value { font-size: 1.2rem; }
+    .assurance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    @media (max-width: 860px) { .assurance-grid { grid-template-columns: 1fr; } }
+    .assurance-card h3 { font-size: 0.9rem; margin-bottom: 0.75rem; }
+    .assurance-record { border-top: 1px solid rgba(255, 255, 255, 0.06); padding: 0.7rem 0; }
+    .assurance-record:first-child { border-top: 0; padding-top: 0; }
+    .assurance-field { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.76rem; margin: 0.18rem 0; }
+    .assurance-field-label { color: var(--text-dim); }
+    .assurance-field-value { color: var(--text-main); text-align: right; word-break: break-word; }
+    .assurance-unknown { color: var(--accent-amber); }
+
     /* Section 1: Capabilities Explorer */
     .filter-bar {
       display: flex;
@@ -869,6 +883,7 @@
     </div>
 
     <nav class="nav-bar">
+      <button class="nav-btn" onclick="switchTab('assurance')">Mission Control</button>
       <button class="nav-btn active" onclick="switchTab('explorer')">🔍 Capabilities</button>
       <button class="nav-btn" onclick="switchTab('dag')">🔀 Recipe DAG</button>
       <button class="nav-btn" onclick="switchTab('benchmarks')">📊 Benchmarks</button>
@@ -902,6 +917,24 @@
         <div class="stat-sub">Zero LLM inference tokens (Ctrl C)</div>
       </div>
     </div>
+
+    <!-- SECTION 0: Assurance / Mission Control -->
+    <section id="section-assurance" class="dashboard-panel hidden">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title"><span class="icon">MC</span> Assurance / Mission Control</h2>
+          <p class="section-desc">Read-only outcome, evidence, verification, and recovery visibility. Unknown means no authoritative store is available.</p>
+        </div>
+        <div class="status-badge"><span>Authority</span><span class="badge-count" id="assuranceAuthority">UNKNOWN</span></div>
+      </div>
+      <div class="assurance-summary" id="assuranceSummary"></div>
+      <div class="assurance-grid">
+        <div class="assurance-card"><h3>Outcomes</h3><div id="assuranceOutcomes"></div></div>
+        <div class="assurance-card"><h3>Evidence</h3><div id="assuranceEvidence"></div></div>
+        <div class="assurance-card"><h3>Verification</h3><div id="assuranceVerification"></div></div>
+        <div class="assurance-card"><h3>Recovery</h3><div id="assuranceRecovery"></div></div>
+      </div>
+    </section>
 
     <!-- SECTION 1: Capabilities Explorer -->
     <section id="section-explorer" class="dashboard-panel">
@@ -1224,7 +1257,8 @@
       traces: [],
       selectedTrace: null,
       charts: {},
-      lastExecutionTraceId: null
+      lastExecutionTraceId: null,
+      assurance: null
     };
 
     // Navigation Switcher
@@ -1235,7 +1269,7 @@
       const targetSec = document.getElementById(`section-${tabId}`);
       if (targetSec) targetSec.classList.remove('hidden');
 
-      const btnIndex = ['explorer', 'dag', 'benchmarks', 'telemetry', 'sandbox'].indexOf(tabId);
+      const btnIndex = ['assurance', 'explorer', 'dag', 'benchmarks', 'telemetry', 'sandbox'].indexOf(tabId);
       if (btnIndex >= 0) {
         document.querySelectorAll('.nav-btn')[btnIndex].classList.add('active');
       }
@@ -1257,10 +1291,90 @@
           loadCapabilities(),
           loadRecipes(),
           loadBenchmarks(),
-          loadTraces()
+          loadTraces(),
+          loadAssurance()
         ]);
       } catch (err) {
         console.error("Failed loading dashboard data:", err);
+      }
+    }
+
+    function assuranceValue(value) {
+      if (value === null || value === undefined || value === '') return 'UNKNOWN';
+      if (typeof value === 'object') return JSON.stringify(value);
+      return String(value);
+    }
+
+    function appendAssuranceField(parent, label, value) {
+      const row = document.createElement('div');
+      row.className = 'assurance-field';
+      const labelNode = document.createElement('span');
+      labelNode.className = 'assurance-field-label';
+      labelNode.textContent = label;
+      const valueNode = document.createElement('span');
+      valueNode.className = 'assurance-field-value';
+      const rendered = assuranceValue(value);
+      valueNode.textContent = rendered;
+      if (rendered === 'UNKNOWN') valueNode.classList.add('assurance-unknown');
+      row.append(labelNode, valueNode);
+      parent.appendChild(row);
+    }
+
+    function renderAssuranceRecords(containerId, records, fields) {
+      const container = document.getElementById(containerId);
+      container.replaceChildren();
+      if (!Array.isArray(records) || records.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'assurance-unknown';
+        empty.textContent = 'UNKNOWN — no authoritative records available';
+        container.appendChild(empty);
+        return;
+      }
+      records.forEach(record => {
+        const item = document.createElement('div');
+        item.className = 'assurance-record';
+        fields.forEach(([label, key]) => appendAssuranceField(item, label, record && record[key]));
+        container.appendChild(item);
+      });
+    }
+
+    function renderAssurance(data) {
+      state.assurance = data || {};
+      const authority = assuranceValue(state.assurance.authority);
+      const authorityNode = document.getElementById('assuranceAuthority');
+      authorityNode.textContent = authority;
+      authorityNode.classList.toggle('assurance-unknown', authority === 'UNKNOWN');
+
+      const summary = document.getElementById('assuranceSummary');
+      summary.replaceChildren();
+      [['Authority', authority], ['Tenant', state.assurance.tenant_id], ['Outcomes', Array.isArray(state.assurance.outcomes) ? state.assurance.outcomes.length : 0], ['Authoritative', state.assurance.authoritative === true ? 'YES' : 'NO']].forEach(([label, value]) => {
+        const card = document.createElement('div');
+        card.className = 'assurance-summary-card';
+        const title = document.createElement('div');
+        title.className = 'stat-label';
+        title.textContent = label;
+        const result = document.createElement('div');
+        result.className = 'stat-value';
+        result.textContent = assuranceValue(value);
+        if (result.textContent === 'UNKNOWN' || result.textContent === 'NO') result.classList.add('assurance-unknown');
+        card.append(title, result);
+        summary.appendChild(card);
+      });
+
+      renderAssuranceRecords('assuranceOutcomes', state.assurance.outcomes, [['Outcome ID', 'outcome_id'], ['Status', 'status'], ['Trace ID', 'trace_id'], ['Completion authority', 'completion_authoritative']]);
+      renderAssuranceRecords('assuranceEvidence', state.assurance.evidence, [['Evidence ID', 'evidence_id'], ['Type', 'evidence_type'], ['Source', 'source'], ['Status', 'status']]);
+      renderAssuranceRecords('assuranceVerification', state.assurance.verification, [['Verification ID', 'verification_id'], ['Status', 'status'], ['Outcome ID', 'outcome_id'], ['Reason', 'reason']]);
+      renderAssuranceRecords('assuranceRecovery', state.assurance.recovery, [['Outcome ID', 'outcome_id'], ['State', 'state'], ['Decision', 'decision'], ['Reason', 'reason']]);
+    }
+
+    async function loadAssurance() {
+      try {
+        const res = await fetch('/api/assurance');
+        const data = await res.json();
+        renderAssurance(res.ok ? data : { authority: 'UNKNOWN' });
+      } catch (e) {
+        renderAssurance({ authority: 'UNKNOWN' });
+        console.warn('Assurance data unavailable:', e);
       }
     }
 
@@ -1435,10 +1549,14 @@
       document.getElementById('metaVersion').textContent = r.version;
 
       const appList = document.getElementById('metaApplicability');
-      appList.innerHTML = (r.applicability_conditions || []).map(c => `<li>${c}</li>`).join('');
+      appList.replaceChildren(...(r.applicability_conditions || []).map(c => {
+        const li = document.createElement('li'); li.textContent = c; return li;
+      }));
 
       const invList = document.getElementById('metaInvariants');
-      invList.innerHTML = (r.invariants || []).map(i => `<li>${i}</li>`).join('');
+      invList.replaceChildren(...(r.invariants || []).map(i => {
+        const li = document.createElement('li'); li.textContent = i; return li;
+      }));
 
       const cpList = document.getElementById('metaCheckpoints');
       cpList.innerHTML = [
@@ -1818,7 +1936,10 @@
       });
 
       if (filtered.length === 0) {
-        container.innerHTML = `<div style="padding:1.5rem; text-align:center; color:var(--text-dim); font-size:0.8rem;">No matching traces found</div>`;
+        const empty = document.createElement('div');
+        empty.style.cssText = 'padding:1.5rem; text-align:center; color:var(--text-dim); font-size:0.8rem;';
+        empty.textContent = 'No matching traces found';
+        container.appendChild(empty);
         return;
       }
 
@@ -1831,14 +1952,13 @@
         const targetDesc = t.recipe_id ? `recipe: ${t.recipe_id}` : (t.intent_id || (t.capability_ids || []).join(', '));
         const latencyMs = Math.round((t.latency || 0) * 1000);
 
-        item.innerHTML = `
-          <div>
-            <div class="trace-id-badge">${t.trace_id}</div>
-            <div style="font-size:0.8rem; font-weight:500; margin-top:0.15rem;">${targetDesc}</div>
-            <div style="font-size:0.7rem; color:var(--text-dim);">Latency: ${latencyMs}ms</div>
-          </div>
-          <span class="trace-status-pill ${isDelivered ? 'delivered' : 'failed'}">${t.outcome || 'unknown'}</span>
-        `;
+        const details = document.createElement('div');
+        const traceId = document.createElement('div'); traceId.className = 'trace-id-badge'; traceId.textContent = t.trace_id || '';
+        const target = document.createElement('div'); target.style.cssText = 'font-size:0.8rem; font-weight:500; margin-top:0.15rem;'; target.textContent = targetDesc || '';
+        const latency = document.createElement('div'); latency.style.cssText = 'font-size:0.7rem; color:var(--text-dim);'; latency.textContent = `Latency: ${latencyMs}ms`;
+        details.append(traceId, target, latency);
+        const status = document.createElement('span'); status.className = `trace-status-pill ${isDelivered ? 'delivered' : 'failed'}`; status.textContent = t.outcome || 'unknown';
+        item.append(details, status);
         container.appendChild(item);
       });
     }
@@ -1851,9 +1971,11 @@
 
       document.getElementById('detailTraceId').textContent = t.trace_id;
       const isDelivered = (t.outcome || '').toLowerCase() === 'delivered';
-      document.getElementById('detailOutcomeBadge').innerHTML = `
-        <span class="trace-status-pill ${isDelivered ? 'delivered' : 'failed'}">${t.outcome || 'delivered'}</span>
-      `;
+      const outcomeBadge = document.getElementById('detailOutcomeBadge');
+      const outcomePill = document.createElement('span');
+      outcomePill.className = `trace-status-pill ${isDelivered ? 'delivered' : 'failed'}`;
+      outcomePill.textContent = t.outcome || 'delivered';
+      outcomeBadge.replaceChildren(outcomePill);
 
       // Waterfall breakdown
       const wfContainer = document.getElementById('waterfallStepsContainer');
@@ -1869,13 +1991,11 @@
       stages.forEach(s => {
         const stepRow = document.createElement('div');
         stepRow.className = 'waterfall-step';
-        stepRow.innerHTML = `
-          <div class="waterfall-name">${s.name}</div>
-          <div class="waterfall-track">
-            <div class="waterfall-fill" style="width: ${s.pct}%;"></div>
-          </div>
-          <div class="waterfall-duration">${s.dur}</div>
-        `;
+        const name = document.createElement('div'); name.className = 'waterfall-name'; name.textContent = s.name;
+        const track = document.createElement('div'); track.className = 'waterfall-track';
+        const fill = document.createElement('div'); fill.className = 'waterfall-fill'; fill.style.width = `${s.pct}%`; track.appendChild(fill);
+        const duration = document.createElement('div'); duration.className = 'waterfall-duration'; duration.textContent = s.dur;
+        stepRow.append(name, track, duration);
         wfContainer.appendChild(stepRow);
       });
 
@@ -1941,7 +2061,11 @@
       if (!text) return;
 
       const candContainer = document.getElementById('sandboxCandidatesView');
-      candContainer.innerHTML = '<div style="color:var(--text-dim); padding:0.5rem 0;">Retrieving candidate capabilities...</div>';
+      candContainer.replaceChildren();
+      const loading = document.createElement('div');
+      loading.style.cssText = 'color:var(--text-dim); padding:0.5rem 0;';
+      loading.textContent = 'Retrieving candidate capabilities...';
+      candContainer.appendChild(loading);
 
       try {
         const res = await fetch('/api/capabilities/discover', {
@@ -1961,13 +2085,16 @@
             row.style.justifyContent = 'space-between';
             row.style.alignItems = 'center';
 
-            row.innerHTML = `
-              <div>
-                <strong class="text-mono text-cyan">${idx + 1}. ${cand.capability_id}</strong>
-                <span style="color:var(--text-dim); font-size:0.7rem; margin-left:0.4rem;">score: ${(cand.score || 1).toFixed(3)}</span>
-              </div>
-              <button class="btn-quick-run" style="padding:0.15rem 0.45rem; font-size:0.68rem;" onclick="selectCandidateForDispatch('${cand.capability_id}')">Select</button>
-            `;
+            const details = document.createElement('div');
+            const capability = document.createElement('strong'); capability.className = 'text-mono text-cyan';
+            capability.textContent = `${idx + 1}. ${cand.capability_id || ''}`;
+            const score = document.createElement('span'); score.style.cssText = 'color:var(--text-dim); font-size:0.7rem; margin-left:0.4rem;';
+            score.textContent = `score: ${(cand.score || 1).toFixed(3)}`;
+            details.append(capability, score);
+            const select = document.createElement('button'); select.className = 'btn-quick-run';
+            select.style.cssText = 'padding:0.15rem 0.45rem; font-size:0.68rem;'; select.textContent = 'Select';
+            select.onclick = () => selectCandidateForDispatch(cand.capability_id);
+            row.append(details, select);
             candContainer.appendChild(row);
           });
 
@@ -1990,7 +2117,9 @@
           }
         }
       } catch (err) {
-        candContainer.innerHTML = `<div style="color:var(--accent-rose);">Discovery error: ${err}</div>`;
+        candContainer.replaceChildren();
+        const error = document.createElement('div'); error.style.color = 'var(--accent-rose)';
+        error.textContent = `Discovery error: ${err}`; candContainer.appendChild(error);
       }
     }
 

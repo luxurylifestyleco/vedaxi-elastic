@@ -8,16 +8,22 @@ and provides REST API endpoints for:
     - /api/recipes             -> all recipes from control_c.build_store()
     - /api/benchmarks          -> latest benchmark results from packages/elastic-bench/reports/benchmark_results.json
     - /api/traces              -> recent execution traces from db/elastic_traces.db or in-memory telemetry
+    - /api/assurance          -> read-only assurance projection (UNKNOWN when no authoritative store exists)
     - /api/intent/compile      -> compile natural language intent to IntentIR
     - /api/capabilities/discover -> discover top-k capability candidates for an intent
     - /api/execute             -> dispatch capability or recipe execution against demo-bank
 
 Default port is 8500 (configurable via DASHBOARD_PORT).
+
+Cross-origin access is disabled by default. Set ``DASHBOARD_CORS_ORIGINS`` to a
+comma-separated explicit origin allowlist when a separate dashboard origin is
+intended; authentication and tenant enforcement remain unimplemented here.
 """
 
 from __future__ import annotations
 
 import json
+import hmac
 import os
 import re
 import sqlite3
@@ -80,6 +86,43 @@ _RECIPE_STORE: RecipeStore = build_store()
 
 # Wire bus into the recipe store for execution telemetry
 _RECIPE_STORE.bus = _BUS
+
+
+def _cors_origins() -> set[str]:
+    """Return the explicitly configured CORS origin allowlist."""
+    configured = os.environ.get("DASHBOARD_CORS_ORIGINS", "")
+    return {origin.strip() for origin in configured.split(",") if origin.strip()}
+
+
+def _apply_security_headers(handler: BaseHTTPRequestHandler) -> None:
+    """Apply transport-independent response hardening and explicit CORS."""
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Referrer-Policy", "no-referrer")
+    handler.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+
+    origin = handler.headers.get("Origin")
+    if origin and origin in _cors_origins():
+        handler.send_header("Access-Control-Allow-Origin", origin)
+        handler.send_header("Vary", "Origin")
+        handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        handler.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+
+def _execution_authorized(handler: BaseHTTPRequestHandler) -> bool:
+    """Allow execution locally, but require a bearer token on exposed binds."""
+    bind_host = str(getattr(handler.server, "dashboard_bind_host", "127.0.0.1"))
+    if bind_host in {"127.0.0.1", "::1", "localhost"}:
+        return True
+
+    configured_token = os.environ.get("DASHBOARD_EXECUTION_TOKEN", "")
+    authorization = handler.headers.get("Authorization", "")
+    scheme, _, presented_token = authorization.partition(" ")
+    return bool(
+        configured_token
+        and scheme.lower() == "bearer"
+        and hmac.compare_digest(presented_token, configured_token)
+    )
 
 
 def _capability_by_id(capability_id: str) -> Optional[Capability]:
@@ -559,6 +602,30 @@ def _handle_traces(query_params: Dict[str, List[str]]) -> Tuple[int, Dict[str, A
     }
 
 
+def _handle_assurance(query_params: Dict[str, List[str]]) -> Tuple[int, Dict[str, Any]]:
+    """Return an assurance projection without manufacturing authority.
+
+    The dashboard currently has only legacy telemetry storage.  That store is
+    intentionally not treated as an authoritative outcome/evidence ledger, and
+    tenant identity is never inferred from request parameters.  Keep the
+    response shape stable for Mission Control consumers while making the
+    evidence gap explicit until a trusted assurance store is connected.
+    """
+    _ = query_params  # Query parameters cannot establish tenant or authority.
+    return 200, {
+        "authority": "UNKNOWN",
+        "source": "legacy-dashboard-telemetry",
+        "tenant_id": "UNKNOWN",
+        "authoritative": False,
+        "reason": "no authoritative assurance store is connected",
+        "total": 0,
+        "outcomes": [],
+        "evidence": [],
+        "verification": [],
+        "recovery": [],
+    }
+
+
 def _handle_topology() -> Tuple[int, Dict[str, Any]]:
     """Return safe public runtime topology across all 7 districts."""
     nodes = [
@@ -992,9 +1059,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        _apply_security_headers(self)
         self.end_headers()
         self.wfile.write(data)
 
@@ -1003,15 +1068,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        _apply_security_headers(self)
         self.end_headers()
         self.wfile.write(data)
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        _apply_security_headers(self)
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -1060,6 +1123,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(status, payload)
             return
 
+        # Read-only assurance projection. Legacy telemetry is not assurance proof.
+        if path == "/api/assurance":
+            status, payload = _handle_assurance(query)
+            self._send_json(status, payload)
+            return
+
         # Topology
         if path == "/api/topology":
             status, payload = _handle_topology()
@@ -1091,6 +1160,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/execute":
+            if not _execution_authorized(self):
+                self.send_response(401)
+                self.send_header("WWW-Authenticate", 'Bearer realm="dashboard-execution"')
+                _apply_security_headers(self)
+                self.end_headers()
+                return
             status, payload = _handle_execute(body)
             self._send_json(status, payload)
             return
@@ -1105,7 +1180,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
 def create_app(host: str = "127.0.0.1", port: int = 0) -> ThreadingHTTPServer:
     """Build the ThreadingHTTPServer instance (used by test fixtures and CLI)."""
-    return ThreadingHTTPServer((host, port), DashboardHandler)
+    server = ThreadingHTTPServer((host, port), DashboardHandler)
+    server.dashboard_bind_host = host
+    return server
 
 
 def main() -> None:

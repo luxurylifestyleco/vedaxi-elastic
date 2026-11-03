@@ -40,3 +40,19 @@ Regenerate schema from this directory with:
 Marketplace implementation belongs to its separate owner. No marketplace,
 payment processing, private execution policy, trust score or signing service is
 implemented by these contracts.
+
+## AP2 integration boundary
+
+`packages/assurance-protocol/ap2.py` is a local, provider-neutral AP2 contract
+slice. `ap2_integration_boundary()` is the authoritative declaration of what
+this repository covers: mandate validation, request binding, receipt shape, and
+fail-closed evaluation. It does not authorize, charge, settle, call a provider,
+authenticate a provider, verify receipt signatures, or establish payment
+completion.
+
+The boundary therefore marks live payment execution as `EXTERNAL` and provider
+authentication, receipt-signature verification, and payment completion as
+`UNKNOWN`. External calls are disabled. A matching receipt, even when local
+flags indicate trust and signature checks, remains `UNVERIFIED` until an
+approved external adapter and independent evidence exist. Unknown or absent
+provider state must not be converted into success or used to trigger a retry.

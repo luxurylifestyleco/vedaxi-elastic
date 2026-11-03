@@ -98,11 +98,11 @@ class TelemetryRecorder:
         return list(self._completed)
 
     def get(self, trace_id: str) -> Optional[TelemetryRecord]:
-        """Return a finalized record by trace id, or ``None``."""
+        """Return a finalized or currently-running record by trace id."""
         for record in self._completed:
             if record.trace_id == trace_id:
                 return record
-        return None
+        return self._records.get(trace_id)
 
     def export_json(self, indent: int = 2) -> str:
         """Serialize all finalized records to a JSON string."""

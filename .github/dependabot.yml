@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    allow:
+      - dependency-name: langgraph
+      - dependency-name: langgraph-checkpoint
+      - dependency-name: langgraph-prebuilt
+      - dependency-name: langgraph-sdk

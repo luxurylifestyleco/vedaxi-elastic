@@ -54,6 +54,25 @@ _LEDGER: List[Dict[str, Any]] = [
     {"date": "2026-03-25", "description": "Travel", "amount": -410.00, "type": "debit"},
 ]
 
+_CATALOG: List[Dict[str, Any]] = [
+    {
+        "id": "prod_runner_pro",
+        "title": "Runner Pro",
+        "description": {"plain": "Lightweight running shoes with responsive cushioning."},
+        "price": {"amount": 12000, "currency": "USD"},
+        "variant_id": "prod_runner_pro_size10",
+        "available": True,
+    },
+    {
+        "id": "prod_trail_blazer",
+        "title": "Trail Blazer X",
+        "description": {"plain": "Trail shoes with superior traction."},
+        "price": {"amount": 15000, "currency": "USD"},
+        "variant_id": "prod_trail_blazer_size10",
+        "available": True,
+    },
+]
+
 
 def _new_id(prefix: str) -> str:
     """Generate a synthetic id like ``PAY-<uuid4-hex>``."""
@@ -63,6 +82,53 @@ def _new_id(prefix: str) -> str:
 def _ok(**fields: Any) -> Dict[str, Any]:
     """Wrap a result with a success marker."""
     return {"ok": True, "status": "success", **fields}
+
+
+def _catalog_product(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Render one synthetic product in the UCP Catalog shape."""
+    price = item["price"]
+    return {
+        "id": item["id"],
+        "title": item["title"],
+        "description": item["description"],
+        "price_range": {"min": price, "max": price},
+        "variants": [
+            {
+                "id": item["variant_id"],
+                "title": item["title"],
+                "description": item["description"],
+                "price": price,
+                "availability": {"available": item["available"]},
+            }
+        ],
+    }
+
+
+def search_products(query: str = "") -> Dict[str, Any]:
+    """Search the synthetic read-only catalog; no transaction is created."""
+    needle = query.strip().lower()
+    products = [
+        _catalog_product(item)
+        for item in _CATALOG
+        if not needle
+        or needle in item["title"].lower()
+        or needle in item["description"]["plain"].lower()
+    ]
+    return _ok(products=products)
+
+
+def lookup_products(ids: List[str]) -> Dict[str, Any]:
+    """Batch lookup synthetic products, preserving partial-success semantics."""
+    requested = set(ids)
+    products = [_catalog_product(item) for item in _CATALOG if item["id"] in requested]
+    missing = sorted(requested - {item["id"] for item in _CATALOG})
+    result: Dict[str, Any] = _ok(products=products)
+    if missing:
+        result["messages"] = [
+            {"type": "info", "code": "not_found", "content": product_id}
+            for product_id in missing
+        ]
+    return result
 
 
 # ---------------------------------------------------------------------------

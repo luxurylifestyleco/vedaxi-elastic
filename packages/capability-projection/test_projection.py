@@ -6,14 +6,26 @@ import pytest
 
 from a2a import A2AClient, A2AInboundAdapter
 from capability import Capability
-from discovery import agent_card, agents_json, agents_txt
+from discovery import (
+    agent_card,
+    agents_json,
+    agents_txt,
+    negotiate_ucp_capabilities,
+    ucp_profile,
+)
 from intent_ir import IntentIR
 from mcp_adapter import MCPAdapter
-from projection import project, to_a2a_skill, to_mcp_tool, to_ucp_capability
+from projection import (
+    project,
+    to_a2a_skill,
+    to_mcp_tool,
+    to_ucp_capability,
+    to_webmcp_tool,
+)
 from registry import CapabilityRegistry
 from remote_mcp import MCP_PROTOCOL_VERSION, RemoteMCPClient
 from runner import RecipeDAGRunner
-from telemetry import EventBus, TelemetryRecorder
+from telemetry import EventBus, ListSubscriber, TelemetryRecorder
 
 
 def capability(**changes):
@@ -31,6 +43,8 @@ def capability(**changes):
         "metadata": {
             "source": "public-catalog",
             "commerce_operation": "product_search",
+            "ucp_enabled": True,
+            "ucp_service_endpoint": "https://elastic.example/ucp/v1",
         },
     }
     values.update(changes)
@@ -46,6 +60,18 @@ def test_capability_projects_to_a2a_and_mcp_without_losing_identity():
     assert mcp["_meta"]["elastic"]["provider"] == "shop"
 
 
+def test_webmcp_projection_is_explicitly_metadata_only_and_fail_closed():
+    tool = to_webmcp_tool(capability())
+    assert tool["capabilityId"] == "search_products"
+    assert tool["webmcp"] == {
+        "api": "document.modelContext",
+        "registration": "metadata-only",
+        "execution": "unavailable",
+        "failClosed": True,
+    }
+    assert "execute" not in tool
+
+
 def test_discovery_and_agent_card_are_generated_from_enabled_capabilities():
     caps = [capability()]
     card = agent_card(caps, "https://elastic.example")
@@ -55,17 +81,63 @@ def test_discovery_and_agent_card_are_generated_from_enabled_capabilities():
     assert "MCP: https://elastic.example/mcp" in text
     assert "A2A: https://elastic.example/.well-known/agent-card.json" in text
     assert "WebMCP: https://web.example/tools" in text
+    assert structured["webmcp"] == [
+        {
+            "url": "https://web.example/tools",
+            "transport": "browser-boundary",
+            "status": "metadata-only",
+            "execution": "unavailable",
+        }
+    ]
     assert "UCP: https://elastic.example/.well-known/ucp" in text
     assert structured["mcp"][0]["transport"] == "streamable-http"
     assert structured["a2a"][0]["url"].endswith("agent-card.json")
 
 
+def test_webmcp_is_not_discovered_without_explicit_boundary_url():
+    assert "webmcp" not in agents_json([capability()], "https://elastic.example")
+
+
 def test_ucp_accepts_only_supported_commerce_capabilities():
     projected = to_ucp_capability(capability())
     assert projected["name"] == "dev.ucp.shopping.catalog.search"
-    assert projected["requiresHumanConfirmation"] is False
+    assert projected["version"] == "2026-08-25"
+    assert projected["schema"].endswith("/schemas/shopping/catalog_search.json")
     with pytest.raises(ValueError, match="not eligible"):
         to_ucp_capability(capability(domain="research", metadata={}))
+
+
+def test_ucp_fails_closed_for_unimplemented_checkout_and_missing_opt_in():
+    with pytest.raises(ValueError, match="not eligible"):
+        to_ucp_capability(
+            capability(
+                metadata={"commerce_operation": "checkout", "ucp_enabled": True}
+            )
+        )
+    with pytest.raises(ValueError, match="not eligible"):
+        to_ucp_capability(
+            capability(
+                metadata={"commerce_operation": "product_search"}
+            )
+        )
+
+
+def test_ucp_profile_has_required_registries_and_negotiates_exact_capabilities():
+    business = ucp_profile([capability()], "https://business.example")
+    platform = ucp_profile([capability()], "https://platform.example")
+    assert business["ucp"]["services"]["dev.ucp.shopping"][0]["transport"] == "rest"
+    assert business["ucp"]["payment_handlers"] == {}
+    result = negotiate_ucp_capabilities(business, platform)
+    assert result["ucp"]["version"] == "2026-08-25"
+    assert "dev.ucp.shopping.catalog.search" in result["ucp"]["capabilities"]
+
+
+def test_ucp_negotiation_rejects_version_mismatch():
+    business = ucp_profile([capability()], "https://business.example")
+    platform = ucp_profile([capability()], "https://platform.example")
+    platform["ucp"]["version"] = "2026-01-23"
+    with pytest.raises(ValueError, match="exact UCP protocol version"):
+        negotiate_ucp_capabilities(business, platform)
 
 
 def test_dummy_protocol_needs_only_an_adapter():
@@ -96,6 +168,8 @@ class _Retriever:
 def test_a2a_request_runs_through_elastic_runtime_and_keeps_protocol_metadata():
     cap = capability()
     bus = EventBus()
+    events = ListSubscriber()
+    bus.subscribe(events)
     recorder = TelemetryRecorder(bus)
     calls = []
     adapter = A2AInboundAdapter(
@@ -116,14 +190,22 @@ def test_a2a_request_runs_through_elastic_runtime_and_keeps_protocol_metadata():
             }
         }
     )
-    assert response["task"]["status"]["state"] == "TASK_STATE_COMPLETED"
+    assert response["task"]["status"]["state"] == "TASK_STATE_WORKING"
     assert calls == [("search_products", {"query": "red shoes"})]
     record = recorder.get(response["task"]["metadata"]["traceId"])
     assert record is not None
-    assert record.capability_ids == ["search_products"]
+    assert record.outcome is None
     assert record.protocol_metadata["source_protocol"] == "a2a"
-    assert record.protocol_metadata["source_endpoint"].endswith("/message:send")
-    assert record.outcome == "delivered"
+    selected = next(event for event in events.events if event.event_type.value == "capability.selected")
+    assert selected.payload["protocol"]["source_protocol"] == "a2a"
+    assert selected.payload["protocol"]["source_endpoint"].endswith("/message:send")
+    assert selected.payload["capability_id"] == "search_products"
+    assert "outcome.delivered" not in [event.event_type.value for event in events.events]
+    assert "evaluation.completed" in [event.event_type.value for event in events.events]
+    metadata = response["task"]["metadata"]
+    assert metadata["outcomeStatus"] == "PARTIALLY_COMPLETED"
+    assert metadata["verificationStatus"] == "INSUFFICIENT"
+    assert metadata["completionAuthoritative"] is False
 
 
 class _RemoteTransport:

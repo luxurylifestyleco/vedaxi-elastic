@@ -7,6 +7,7 @@ try:
         to_mcp_tool,
         to_ucp_capability,
         to_webmcp_tool,
+        UCP_VERSION,
     )
 except ImportError:  # source-tree imports used by this repository's tests
     from projection import (
@@ -15,7 +16,13 @@ except ImportError:  # source-tree imports used by this repository's tests
         to_mcp_tool,
         to_ucp_capability,
         to_webmcp_tool,
+        UCP_VERSION,
     )
+
+try:
+    from .webmcp_boundary import WebMCPBoundary
+except ImportError:  # source-tree imports used by this repository's tests
+    from webmcp_boundary import WebMCPBoundary
 
 __all__ = [
     "project",
@@ -23,4 +30,6 @@ __all__ = [
     "to_mcp_tool",
     "to_ucp_capability",
     "to_webmcp_tool",
+    "UCP_VERSION",
+    "WebMCPBoundary",
 ]

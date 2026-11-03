@@ -67,9 +67,20 @@ def to_mcp_tool(capability: Capability) -> Dict[str, Any]:
 
 
 def to_webmcp_tool(capability: Capability) -> Dict[str, Any]:
-    """Project serializable WebMCP metadata; the browser supplies execute()."""
+    """Project a fail-closed WebMCP browser-boundary descriptor.
+
+    This repository does not provide a browser runtime or ``document.modelContext``
+    bridge.  The descriptor is therefore metadata only and must not be treated as
+    proof that registration or execution is available.
+    """
     tool = to_mcp_tool(capability)
     tool["capabilityId"] = capability.id
+    tool["webmcp"] = {
+        "api": "document.modelContext",
+        "registration": "metadata-only",
+        "execution": "unavailable",
+        "failClosed": True,
+    }
     return tool
 
 
@@ -86,36 +97,59 @@ def to_a2a_skill(capability: Capability) -> Dict[str, Any]:
     }
 
 
+UCP_VERSION = "2026-08-25"
+
+# Only operations with an implemented, read-only Elastic execution path are
+# eligible today. Cart, checkout, payment, fulfillment, order, and returns
+# remain fail-closed until their end-to-end contracts exist.
 _UCP_OPERATIONS = {
     "product_search": "dev.ucp.shopping.catalog.search",
     "catalog.search": "dev.ucp.shopping.catalog.search",
-    "cart": "dev.ucp.shopping.cart",
-    "checkout": "dev.ucp.shopping.checkout",
-    "fulfillment": "dev.ucp.shopping.fulfillment",
-    "order": "dev.ucp.shopping.order",
-    "returns": "dev.ucp.shopping.order",
-    "return": "dev.ucp.shopping.order",
+    "catalog.lookup": "dev.ucp.shopping.catalog.lookup",
+}
+
+_UCP_OPERATION_PATHS = {
+    "dev.ucp.shopping.catalog.search": "search",
+    "dev.ucp.shopping.catalog.lookup": "lookup",
+}
+
+_UCP_OPERATION_SPECS = {
+    "dev.ucp.shopping.catalog.search": "shopping/catalog/search",
+    "dev.ucp.shopping.catalog.lookup": "shopping/catalog/lookup",
 }
 
 
 def to_ucp_capability(capability: Capability) -> Dict[str, Any]:
-    """Project explicitly tagged commerce capabilities into UCP operations."""
+    """Project an explicitly enabled, implemented capability into UCP."""
     operation = capability.metadata.get("commerce_operation")
-    if capability.domain != "commerce" or operation not in _UCP_OPERATIONS:
+    if (
+        capability.domain != "commerce"
+        or capability.metadata.get("ucp_enabled") is not True
+        or operation not in _UCP_OPERATIONS
+    ):
         raise ValueError(f"capability is not eligible for UCP: {capability.id}")
-    consequential = operation in {"checkout", "order", "returns", "return"}
+    name = _UCP_OPERATIONS[operation]
+    version = capability.metadata.get("ucp_version", UCP_VERSION)
+    spec_path = _UCP_OPERATION_SPECS[name]
+    schema_name = "catalog_search" if name.endswith(".search") else "catalog_lookup"
     return {
-        "name": _UCP_OPERATIONS[operation],
-        "version": capability.metadata.get("ucp_version", "2026-04-08"),
+        "name": name,
+        "version": version,
+        "spec": capability.metadata.get(
+            "ucp_spec", f"https://ucp.dev/{version}/specification/{spec_path}"
+        ),
+        "schema": capability.metadata.get(
+            "ucp_schema", f"https://ucp.dev/{version}/schemas/shopping/{schema_name}.json"
+        ),
         "operation": operation,
         "description": capability.description,
         "inputSchema": _schema(capability.inputs),
         "outputSchema": _output_schema(capability),
         "endpoint": capability.endpoint,
-        "requiresHumanConfirmation": consequential,
         "metadata": {
             "elasticCapabilityId": capability.id,
             "provider": capability.provider,
             "permissions": capability.permissions,
+            "transportOperation": _UCP_OPERATION_PATHS[name],
         },
     }

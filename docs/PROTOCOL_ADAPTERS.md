@@ -28,7 +28,11 @@ Current status:
 - MCP serving and A2A HTTP+JSON ingress are exercised through gateway integration tests.
 - Remote MCP consumption is exercised with a deterministic Streamable HTTP transport test; no live third-party server is claimed.
 - WebMCP continues to use the browser-native registration lifecycle and now accepts a projection of the canonical capability contract.
-- UCP is projection-only and remains disabled unless an explicitly tagged commerce capability is registered.
+- UCP currently supports a fail-closed catalog projection/profile slice only. A capability must be explicitly tagged with `ucp_enabled`, a supported catalog operation (`product_search`, `catalog.search`, or `catalog.lookup`), and an explicit UCP service endpoint. Checkout, payment, cart, fulfillment, order, and returns are not advertised.
+- UCP profiles use the current checked date version `2026-08-25`, include required `services`, `capabilities`, and `payment_handlers` registries, and use exact-version capability intersection through `negotiate_ucp_capabilities`.
+- UCP REST catalog requests require the `UCP-Agent` profile header at the gateway boundary; profile fetching, signature verification, OAuth, and tenant authorization remain outside this local synthetic gateway and are not claimed as production interoperability.
+- The current demo-bank gateway has no UCP commerce capability and therefore returns no UCP discovery advertisement. No live UCP REST/MCP/A2A commerce operation or transaction is claimed.
+- The synthetic catalog is opt-in only via `ENABLE_SYNTHETIC_UCP_CATALOG=1`; without that flag, the catalog capabilities, UCP profile advertisement, and UCP catalog handlers are disabled.
 - `agents.txt`, `agents.json`, and the A2A Agent Card are generated from registered capabilities and enabled endpoints.
 
 Adding another protocol should require a new `Capability` projection or transport adapter. It should not require changes to Intent IR, retrieval, recipes, or runtime.

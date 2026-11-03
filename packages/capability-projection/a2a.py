@@ -3,13 +3,29 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import time
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlsplit
 
+# The repository runs package tests as source modules.  Add the sibling
+# assurance source directory exactly as the gateway bootstrap does, without
+# creating a second assurance implementation.
+_ASSURANCE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "assurance-protocol",
+)
+if _ASSURANCE_DIR not in sys.path:
+    sys.path.insert(0, _ASSURANCE_DIR)
+
 from recipe import Recipe, RecipeStep
+from evaluator import evaluate_outcome
+from outcome import EvidenceRecord, OutcomeEnvelope, OutcomeStatus, transition_outcome
+from verification import VerificationContext, VerificationEngine
 
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -27,6 +43,7 @@ class A2AInboundAdapter:
         executor: Callable[[str, Dict[str, Any]], Any],
         bus: Any,
         source_endpoint: str,
+        verification_engine: Optional[VerificationEngine] = None,
     ) -> None:
         self.compiler = compiler
         self.retriever = retriever
@@ -35,6 +52,7 @@ class A2AInboundAdapter:
         self.executor = executor
         self.bus = bus
         self.source_endpoint = source_endpoint
+        self.verification_engine = verification_engine or VerificationEngine()
 
     def handle(self, request: Dict[str, Any]) -> Dict[str, Any]:
         message = request.get("message")
@@ -126,21 +144,36 @@ class A2AInboundAdapter:
                     trace_id,
                     {"error": execution.error},
                 )
+            assurance = self._assess_execution(
+                outcome_id=uuid.uuid4().hex,
+                execution_id=trace_id,
+                capability_id=capability.id,
+                protocol=protocol,
+                intent=intent,
+                recipe=recipe,
+            )
             self.bus.emit(
-                "outcome.delivered",
+                "evaluation.completed",
                 trace_id=trace_id,
                 intent_id=intent.intent_id,
                 payload={
-                    "protocol": {**protocol, "execution_outcome": "succeeded"},
-                    "evidence_id": trace_id,
+                    "protocol": {**protocol, "execution_outcome": "executed_not_verified"},
+                    **assurance,
                 },
             )
             return self._response(
                 task_id,
                 context_id,
-                "TASK_STATE_COMPLETED",
+                "TASK_STATE_COMPLETED"
+                if assurance["outcome_status"] == OutcomeStatus.COMPLETED.value
+                else "TASK_STATE_WORKING",
                 trace_id,
                 execution.results,
+                outcome_id=assurance["outcome_id"],
+                evidence_id=assurance["evidence_id"],
+                outcome_status=assurance["outcome_status"],
+                verification_status=assurance["verification_status"],
+                completion_authoritative=assurance["completion_authoritative"],
             )
         except Exception as exc:
             self.bus.emit(
@@ -160,6 +193,87 @@ class A2AInboundAdapter:
                 {"error": str(exc)},
             )
 
+    def _assess_execution(
+        self,
+        *,
+        outcome_id: str,
+        execution_id: str,
+        capability_id: str,
+        protocol: Dict[str, Any],
+        intent: Any,
+        recipe: Recipe,
+    ) -> Dict[str, Any]:
+        """Assess local execution without treating it as provider proof."""
+
+        now = datetime.now(timezone.utc)
+        outcome = OutcomeEnvelope(
+            outcome_id=outcome_id,
+            principal_id="a2a-request",
+            originating_agent_id="elastic-a2a-inbound",
+            intent={"goal": intent.goal, "action": intent.action, "protocol": "a2a"},
+            desired_state={"execution": "successful"},
+            required_capabilities=[capability_id],
+            execution_plan_reference=recipe.recipe_id,
+            verification_policy={"required": True, "policy_reference": "a2a-local-execution-v1"},
+            completion_criteria=["capability execution completed"],
+            evidence_collection_policy={"accepted_types": ["provider_receipt", "attestation"]},
+            recovery_policy={"allow_recovery": False},
+            created_at=now,
+            updated_at=now,
+        )
+        for next_status in (
+            OutcomeStatus.VALIDATING,
+            OutcomeStatus.AUTHORIZED,
+            OutcomeStatus.PLANNING,
+            OutcomeStatus.EXECUTING,
+            OutcomeStatus.VERIFYING,
+        ):
+            outcome = transition_outcome(outcome, next_status)
+
+        evidence_id = f"execution-event-{execution_id}"
+        evidence = EvidenceRecord(
+            evidence_id=evidence_id,
+            tenant_id="unresolved",
+            outcome_id=outcome_id,
+            execution_id=execution_id,
+            evidence_type="execution_event",
+            claim=f"Local A2A recipe runner returned successfully for capability {capability_id}",
+            subject=capability_id,
+            issuer="elastic-a2a-inbound",
+            source="local-recipe-runner",
+            producer="elastic-a2a-inbound",
+            observed_at=now,
+            received_at=now,
+            artifact_reference=f"trace:{execution_id}",
+            protocol_origin=str(protocol["source_protocol"]),
+            verification_status="PENDING",
+            privacy_classification="internal",
+            retention_policy="runtime-default",
+        )
+        verification = self.verification_engine.verify(
+            [evidence],
+            VerificationContext(
+                outcome_id=outcome_id,
+                execution_id=execution_id,
+                policy_reference="a2a-local-execution-v1",
+                verifier_id="elastic-a2a-inbound",
+                required_evidence_ids=[evidence_id],
+            ),
+            verification_id=f"verification-{execution_id}",
+        )
+        outcome_status = evaluate_outcome(outcome, [verification])
+        if outcome_status is OutcomeStatus.COMPLETED:
+            outcome = transition_outcome(outcome, outcome_status, sufficient_evidence=True)
+        else:
+            outcome = transition_outcome(outcome, outcome_status)
+        return {
+            "outcome_id": outcome.outcome_id,
+            "evidence_id": evidence.evidence_id,
+            "outcome_status": outcome.current_status.value,
+            "verification_status": verification.status.value,
+            "completion_authoritative": outcome.current_status is OutcomeStatus.COMPLETED,
+        }
+
     @staticmethod
     def _response(
         task_id: str,
@@ -167,7 +281,23 @@ class A2AInboundAdapter:
         state: str,
         trace_id: str,
         result: Any,
+        *,
+        outcome_id: Optional[str] = None,
+        evidence_id: Optional[str] = None,
+        outcome_status: Optional[str] = None,
+        verification_status: Optional[str] = None,
+        completion_authoritative: Optional[bool] = None,
     ) -> Dict[str, Any]:
+        metadata = {"traceId": trace_id, "evidenceId": evidence_id or trace_id}
+        if outcome_id is not None:
+            metadata.update(
+                {
+                    "outcomeId": outcome_id,
+                    "outcomeStatus": outcome_status,
+                    "verificationStatus": verification_status,
+                    "completionAuthoritative": completion_authoritative,
+                }
+            )
         return {
             "task": {
                 "id": task_id,
@@ -180,7 +310,7 @@ class A2AInboundAdapter:
                         "parts": [{"data": result, "mediaType": "application/json"}],
                     }
                 ],
-                "metadata": {"traceId": trace_id, "evidenceId": trace_id},
+                "metadata": metadata,
             }
         }
 

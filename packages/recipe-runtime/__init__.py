@@ -63,3 +63,11 @@ __all__ = [
     "Executor",
     "execute_recipe",
 ]
+
+try:
+    from .langgraph_adapter import RecipeGraphState, build_recipe_graph, run_recipe_graph
+except ImportError:
+    # LangGraph remains an optional orchestration extra.
+    pass
+else:
+    __all__ += ["RecipeGraphState", "build_recipe_graph", "run_recipe_graph"]

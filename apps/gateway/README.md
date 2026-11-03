@@ -31,6 +31,9 @@ framework dependency is required.
 | `POST` | `/recipes/{id}/execute` | `{"args": dict}` | Recipe execution results (via `RecipeStore.execute`) |
 | `GET` | `/traces/{id}` | — | A telemetry trace by id (from a `TelemetryRecorder`) |
 | `GET` | `/health` | — | `{"status": "ok"}` |
+| `GET` | `/.well-known/ucp` | - | UCP profile for the synthetic catalog |
+| `POST` | `/ucp/v1/catalog/search` | `{"query": str}` | UCP catalog search result |
+| `POST` | `/ucp/v1/catalog/lookup` | `{"ids": [str]}` | UCP partial catalog lookup result |
 
 ### Example
 
@@ -60,3 +63,11 @@ The gateway is intentionally thin. It imports the real packages
 `telemetry`) and the `demo-bank` app, and delegates to their functions. If a
 new capability, recipe, or retrieval strategy is added to a package, the
 gateway picks it up without code changes.
+
+The local UCP surface is deliberately limited to the synthetic read-only
+catalog. Checkout, payment, cart, fulfillment, order, and returns are not
+implemented or advertised. Catalog requests require a `UCP-Agent` profile
+header; profile fetching, signature verification, OAuth, and tenant
+authorization are not implemented by this demo gateway. Set
+`ENABLE_SYNTHETIC_UCP_CATALOG=1` explicitly to enable the local synthetic
+catalog; it is disabled by default.

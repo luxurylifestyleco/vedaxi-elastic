@@ -35,6 +35,9 @@ test = [
 bench = [
     "psycopg2-binary>=2.9",
 ]
+orchestration = [
+    "langgraph>=1.2.19",
+]
 
 [project.urls]
 Homepage = "https://github.com/vedaxi/vedaxi-elastic"
@@ -50,6 +53,7 @@ packages = [
     "recipe_runtime",
     "elastic_bench",
     "telemetry",
+    "assurance_protocol",
 ]
 
 [tool.setuptools.package-dir]
@@ -61,6 +65,7 @@ packages = [
 "recipe_runtime" = "packages/recipe-runtime"
 "elastic_bench" = "packages/elastic-bench"
 "telemetry" = "packages/telemetry"
+"assurance_protocol" = "packages/assurance-protocol"
 
 [tool.setuptools.package-data]
 intent_ir = ["schema.json"]

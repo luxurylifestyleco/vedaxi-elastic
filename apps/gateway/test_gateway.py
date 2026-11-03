@@ -28,6 +28,8 @@ from app import (  # noqa: E402
     _bank_executor,
     create_app,
 )
+import app as gateway_app  # noqa: E402
+from capability import Capability  # noqa: E402
 from recipe import Recipe, RecipeStep  # noqa: E402
 
 
@@ -162,6 +164,20 @@ def test_capability_execute(server):
     assert status == 200
     assert payload["capability_id"] == "get_balance"
     assert "available_balance" in payload["result"]
+    assert payload["outcome_status"] == "PARTIALLY_COMPLETED"
+    assert payload["verification_status"] == "INSUFFICIENT"
+    assert payload["completion_authoritative"] is False
+
+
+def test_capability_execute_preserves_outcome_id(server):
+    status, payload = _request(
+        server,
+        "POST",
+        "/capabilities/get_balance/execute",
+        {"outcome_id": "outcome-contract-1", "args": {"account_id": "ACC-1001"}},
+    )
+    assert status == 200
+    assert payload["outcome_id"] == "outcome-contract-1"
 
 
 def test_capability_execute_not_found(server):
@@ -181,6 +197,24 @@ def test_capability_execute_bad_args(server):
     )
     assert status == 400
     assert "error" in payload
+
+
+def test_capability_execute_fails_closed_for_unsupported_provider(monkeypatch):
+    unsupported = Capability(
+        id="unsupported_capability",
+        name="Unsupported",
+        description="Unsupported provider metadata",
+        domain="test",
+        provider="unknown-provider",
+        protocol="rest",
+    )
+    monkeypatch.setattr(gateway_app, "_capability_by_id", lambda _: unsupported)
+    status, payload = gateway_app._handle_capability_execute(
+        unsupported.id, {"args": {}}
+    )
+    assert status == 501
+    assert payload["error"] == "unsupported provider metadata"
+    assert payload["provider"] == "unknown-provider"
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +277,21 @@ def test_recipe_execute(server, seeded_recipe):
     assert payload["trace_id"]
     assert "s1" in payload["results"]
     assert "available_balance" in payload["results"]["s1"]
+    assert payload["outcome_id"]
+    assert payload["outcome_status"] == "PARTIALLY_COMPLETED"
+    assert payload["verification_status"] == "INSUFFICIENT"
+    assert payload["completion_authoritative"] is False
+
+
+def test_recipe_execute_preserves_outcome_id(server, seeded_recipe):
+    status, payload = _request(
+        server,
+        "POST",
+        "/recipes/gw-recipe-1/execute",
+        {"outcome_id": "recipe-outcome-contract-1", "args": {}},
+    )
+    assert status == 200
+    assert payload["outcome_id"] == "recipe-outcome-contract-1"
 
 
 def test_recipe_execute_not_found(server):

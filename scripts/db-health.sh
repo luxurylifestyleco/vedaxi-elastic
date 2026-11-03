@@ -55,7 +55,8 @@ fi
 echo ""
 echo "Tables:"
 REQUIRED_TABLES=(capabilities intent_examples recipes recipe_versions \
-                 execution_traces execution_steps evaluations benchmark_runs)
+                 execution_traces execution_steps evaluations benchmark_runs \
+                 outcomes delegations evidence_records verification_results)
 MISSING=0
 for t in "${REQUIRED_TABLES[@]}"; do
     COUNT=$("$PSQL" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -tAc \
@@ -70,12 +71,37 @@ for t in "${REQUIRED_TABLES[@]}"; do
     fi
 done
 
+# 4. Append-only assurance triggers
+echo ""
+echo "Assurance controls:"
+REQUIRED_TRIGGERS=(evidence_records_no_update verification_results_no_update)
+for trigger in "${REQUIRED_TRIGGERS[@]}"; do
+    COUNT=$("$PSQL" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -tAc \
+        "SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND t.tgname='${trigger}' AND NOT t.tgisinternal;" 2>/dev/null || echo "0")
+    if [ "$COUNT" = "1" ]; then
+        echo "  [OK]   ${trigger}"
+    else
+        echo "  [FAIL] ${trigger} (missing)"
+        MISSING=1
+    fi
+done
+
+# RLS is deliberately owned by the deployment/authentication boundary, not the
+# public schema. Report that fact explicitly rather than treating it as healthy.
+RLS_ENABLED=$("$PSQL" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -tAc \
+    "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('outcomes','delegations','evidence_records','verification_results') AND c.relrowsecurity;" 2>/dev/null || echo "0")
+if [ "$RLS_ENABLED" = "4" ]; then
+    echo "  [OK]   RLS: enabled on all assurance tables."
+else
+    echo "  [WARN] RLS: NOT CONFIGURED on public assurance tables (deployment boundary owns tenant policy)."
+fi
+
 echo ""
 if [ "$MISSING" = "1" ]; then
-    echo "RESULT: DEGRADED — one or more required tables are missing."
+    echo "RESULT: DEGRADED — one or more required tables or assurance controls are missing."
     echo "        Run ./scripts/db-init.sh to apply migrations and seed."
     exit 1
 else
-    echo "RESULT: HEALTHY — all 8 required tables present."
+    echo "RESULT: HEALTHY — all 12 required tables and assurance triggers present."
     exit 0
 fi

@@ -12,6 +12,7 @@ Capability metadata stays in lock-step with the implemented functions.
 from __future__ import annotations
 
 import inspect
+import os
 from typing import Any, Dict, List, Optional
 
 import bank
@@ -318,6 +319,17 @@ _MANIFEST: List[tuple] = [
      ["offers:read"], "/v1/cashback"),
 ]
 
+_SYNTHETIC_UCP_MANIFEST: List[tuple] = [
+    ("search_products", "commerce", "Search Products",
+     "Search the synthetic product catalog.",
+     {"query": "string"}, {"products": "array"},
+     ["dev.ucp.shopping.catalog.search:read"], "/ucp/v1/catalog/search"),
+    ("lookup_products", "commerce", "Lookup Products",
+     "Look up synthetic products by identifier.",
+     {"ids": "array"}, {"products": "array", "messages": "array"},
+     ["dev.ucp.shopping.catalog.lookup:read"], "/ucp/v1/catalog/lookup"),
+]
+
 
 def build_manifest() -> List[Capability]:
     """Build a :class:`Capability` for every bank function in the manifest.
@@ -326,7 +338,10 @@ def build_manifest() -> List[Capability]:
         A list of Capability objects, one per implemented bank function.
     """
     caps: List[Capability] = []
-    for (func_name, domain, name, description, inputs, outputs, permissions, endpoint) in _MANIFEST:
+    entries = list(_MANIFEST)
+    if os.environ.get("ENABLE_SYNTHETIC_UCP_CATALOG") == "1":
+        entries = _SYNTHETIC_UCP_MANIFEST + entries
+    for (func_name, domain, name, description, inputs, outputs, permissions, endpoint) in entries:
         # Verify the function actually exists in the bank module.
         if not hasattr(bank, func_name) or not callable(getattr(bank, func_name)):
             raise AttributeError(f"bank module has no callable '{func_name}'")
@@ -345,7 +360,22 @@ def build_manifest() -> List[Capability]:
                 estimated_latency=60,
                 estimated_cost=0.002,
                 historical_success=0.98,
-                metadata={"tags": [domain, func_name], "version": "1.0", "source": "demo-bank"},
+                metadata={
+                    "tags": [domain, func_name],
+                    "version": "1.0",
+                    "source": "demo-bank",
+                    **(
+                        {
+                            "commerce_operation": "catalog.search" if func_name == "search_products" else "catalog.lookup",
+                            "ucp_enabled": True,
+                            "ucp_service_endpoint": os.environ.get(
+                                "UCP_SERVICE_ENDPOINT", "http://127.0.0.1:8000/ucp/v1"
+                            ),
+                        }
+                        if func_name in {"search_products", "lookup_products"}
+                        else {}
+                    ),
+                },
             )
         )
     return caps

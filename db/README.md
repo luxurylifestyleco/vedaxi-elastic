@@ -9,7 +9,9 @@ Local PostgreSQL infrastructure for the Elastic Web project.
 ./scripts/db-health.sh   # verify connectivity, pgvector, and all 8 tables
 ```
 
-Both scripts are idempotent and safe to re-run.
+Both scripts are idempotent and safe to re-run. Migration `004_outcome_assurance.sql`
+is additive but is not production-ready until the owning tenant/RLS boundary,
+retention lifecycle, and rollback procedure are supplied.
 
 ## Requirements
 
@@ -19,7 +21,23 @@ Both scripts are idempotent and safe to re-run.
 
 ## Schema
 
-Eight tables, using JSONB generously for evolving Elastic structures (no over-normalization):
+The original eight tables remain the execution/benchmark foundation. Migration
+`004_outcome_assurance.sql` adds four tenant-keyed coordination/evidence tables
+without replacing telemetry:
+
+| Table | Purpose |
+|-------|---------|
+| `outcomes` | Protocol-neutral desired state and lifecycle |
+| `delegations` | Scoped, expiring, revocable authority chain |
+| `evidence_records` | Append-only attributed evidence and correction references |
+| `verification_results` | Append-only structured verification decisions |
+
+These new tables require an explicit `tenant_id`; production RLS policies are
+not invented here because the current public schema does not own tenant identity
+or production role policy.
+
+The original eight tables use JSONB generously for evolving Elastic structures
+(no over-normalization):
 
 | Table | Purpose |
 |-------|---------|
@@ -33,6 +51,10 @@ Eight tables, using JSONB generously for evolving Elastic structures (no over-no
 | `benchmark_runs` | Benchmark suite runs + aggregate results |
 
 Flexible payloads (`schema`, `metadata`, `parameters`, `definition`, `input`, `output`, `score`, `results`, ...) are JSONB, indexed with GIN where queried.
+
+The complete schema after migration 004 is twelve tables. `db-health.sh` still
+checks the original eight-table baseline and must be extended before migration
+004 can be treated as operationally verified.
 
 ## pgvector status
 
@@ -55,7 +77,8 @@ explicitly want to; the current schema is fully functional with JSONB embeddings
 ## Files
 
 ```
-db/migrations/001_init.sql   # schema (idempotent)
+db/migrations/001_init.sql   # original schema (idempotent)
+db/migrations/004_outcome_assurance.sql # additive outcome/evidence schema
 db/seed.sql                  # sample rows for every table
 scripts/db-init.sh           # create DB + migrate + seed
 scripts/db-health.sh         # connectivity + pgvector + table verification
