@@ -175,6 +175,24 @@ def test_failed_execution_records_error_and_outcome(
     assert record.latency is not None
 
 
+def test_terminal_trace_ignores_duplicate_and_late_events(
+    bus: EventBus, recorder: TelemetryRecorder
+) -> None:
+    bus.emit(EventType.OUTCOME_DELIVERED, trace_id="trace-terminal-1", timestamp=2.0)
+    bus.emit(
+        EventType.EXECUTION_FAILED,
+        trace_id="trace-terminal-1",
+        payload={"error": "late failure"},
+        timestamp=3.0,
+    )
+    bus.emit(EventType.OUTCOME_DELIVERED, trace_id="trace-terminal-1", timestamp=4.0)
+
+    records = recorder.records()
+    assert len(records) == 1
+    assert records[0].outcome == "delivered"
+    assert records[0].completed_at == 2.0
+
+
 def test_no_external_network_calls(
     bus: EventBus, recorder: TelemetryRecorder
 ) -> None:
@@ -200,3 +218,33 @@ def test_recorder_does_not_emit_events(bus: EventBus, recorder: TelemetryRecorde
     assert len(recorder.records()) == 1
     assert recorder.get("trace-full-1") is not None
     assert recorder.get("missing-trace") is None
+
+
+def test_recorder_preserves_outcome_evidence_and_task_correlation(
+    bus: EventBus, recorder: TelemetryRecorder
+) -> None:
+    bus.emit(
+        EventType.INTENT_RECEIVED,
+        trace_id="trace-a2a-1",
+        intent_id="intent-a2a-1",
+        task_id="task-a2a-1",
+        context_id="context-a2a-1",
+    )
+    bus.emit(
+        EventType.EVALUATION_COMPLETED,
+        trace_id="trace-a2a-1",
+        intent_id="intent-a2a-1",
+        task_id="task-a2a-1",
+        context_id="context-a2a-1",
+        outcome_id="outcome-a2a-1",
+        evidence_id="evidence-a2a-1",
+        verification_id="verification-a2a-1",
+    )
+
+    record = recorder.get("trace-a2a-1")
+    assert record is not None
+    assert record.task_id == "task-a2a-1"
+    assert record.context_id == "context-a2a-1"
+    assert record.outcome_id == "outcome-a2a-1"
+    assert record.evidence_ids == ["evidence-a2a-1"]
+    assert record.verification_id == "verification-a2a-1"

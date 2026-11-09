@@ -21,14 +21,20 @@ def agent_card(
         "description": "Intent-driven access to registered Elastic capabilities.",
         "supportedInterfaces": [
             {
-                "url": f"{base}/message:send",
+                "url": f"{base}/a2a",
+                "protocolBinding": "JSONRPC",
+                "protocolVersion": "1.0",
+            },
+            {
+                # A2A HTTP+JSON clients append the binding paths to this base.
+                "url": base,
                 "protocolBinding": "HTTP+JSON",
                 "protocolVersion": "1.0",
-            }
+            },
         ],
         "provider": {"organization": "Vedaxi", "url": base},
         "version": version,
-        "capabilities": {"streaming": False, "pushNotifications": False},
+        "capabilities": {"streaming": True, "pushNotifications": False},
         "defaultInputModes": ["text/plain", "application/json"],
         "defaultOutputModes": ["application/json"],
         "skills": [to_a2a_skill(capability) for capability in capabilities],

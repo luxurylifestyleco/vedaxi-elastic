@@ -99,28 +99,30 @@ def test_control_c_llm_calls_zero():
         assert c["estimated_model_cost"] == 0.0
 
 
-def test_report_files_exist_and_nonempty():
-    report = br.run_benchmark(num_variants=2, seed=br.SEED)
+def test_report_files_exist_and_nonempty(tmp_path):
+    # Tests must never overwrite the developer's checked-in or dirty reports.
+    reports_dir = str(tmp_path / "reports")
+    report = br.run_benchmark(num_variants=2, seed=br.SEED, reports_dir=reports_dir)
     for name in REPORT_FILES:
-        path = os.path.join(_REPORTS, name)
+        path = os.path.join(reports_dir, name)
         assert os.path.exists(path), f"missing report file: {path}"
         assert os.path.getsize(path) > 0, f"empty report file: {path}"
 
     # JSON report is valid and has the expected structure.
-    with open(os.path.join(_REPORTS, "benchmark_results.json"), encoding="utf-8") as fh:
+    with open(os.path.join(reports_dir, "benchmark_results.json"), encoding="utf-8") as fh:
         data = json.load(fh)
     assert data["num_tasks"] >= 100
     assert set(data["aggregates"].keys()) == {"control_a", "control_b", "control_c"}
     assert len(data["rows"]) == data["num_tasks"] * 3
 
     # CSV has one row per (task, control) run.
-    with open(os.path.join(_REPORTS, "benchmark_results.csv"), encoding="utf-8") as fh:
+    with open(os.path.join(reports_dir, "benchmark_results.csv"), encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
     assert len(rows) == data["num_tasks"] * 3
     assert {r["control"] for r in rows} == {"control_a", "control_b", "control_c"}
 
     # Markdown report is non-trivial.
-    with open(os.path.join(_REPORTS, "BENCHMARK_REPORT.md"), encoding="utf-8") as fh:
+    with open(os.path.join(reports_dir, "BENCHMARK_REPORT.md"), encoding="utf-8") as fh:
         md = fh.read()
     assert "ElasticBench V0" in md
     assert "Control A" in md and "Control B" in md and "Control C" in md

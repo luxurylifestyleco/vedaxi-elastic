@@ -67,9 +67,10 @@ from capability import Capability  # noqa: E402
 from compiler import RuleBasedCompiler  # noqa: E402
 from control_c import build_store, resolve_intent_family  # noqa: E402
 from factory import build_retriever  # noqa: E402
-from intent_ir import IntentIR  # noqa: E402
+from intent_ir import IntentIR, IntentState  # noqa: E402
 from manifest import build_manifest  # noqa: E402
 from recipe import Recipe, RecipeStep  # noqa: E402
+from runner import RecipeDAGRunner  # noqa: E402
 from store import RecipeStore  # noqa: E402
 from telemetry import EventBus, TelemetryRecorder  # noqa: E402
 from telemetry.events import EventType  # noqa: E402
@@ -83,6 +84,7 @@ _RETRIEVER = build_retriever("keyword", _MANIFEST)
 _BUS = EventBus()
 _RECORDER = TelemetryRecorder(_BUS)
 _RECIPE_STORE: RecipeStore = build_store()
+_RUNNER = RecipeDAGRunner()
 
 # Wire bus into the recipe store for execution telemetry
 _RECIPE_STORE.bus = _BUS
@@ -417,62 +419,76 @@ def _compile_intent(text: str, strict: bool = False) -> IntentIR:
         if any(w in lowered for w in ("pay", "payment", "bill", "electric", "utilities")):
             return IntentIR(
                 intent_id=IntentIR.new_id(),
+                original_expression=text.strip(),
+                state=IntentState.DISCOVERY,
                 goal="make_payment",
                 domain="payments",
                 action="pay",
                 object="bill_payment",
-                constraints={"payee": "electricity", "amount": 142.75},
+                constraints={},
                 context={"source_text": text.strip()},
                 desired_output="receipt",
                 authority={"permission": "payments:write"},
-                confidence=0.96,
-                metadata={"compiler": "sandbox-enhanced", "intent_family": "make_payment"},
+                confidence=0.55,
+                uncertainty={"missing": ["payee", "amount"], "needs_clarification": True},
+                metadata={"compiler": "sandbox-enhanced", "intent_family": "make_payment", "inference": "keyword-only"},
             )
         elif any(w in lowered for w in ("freeze", "stolen", "block", "lost card")):
             return IntentIR(
                 intent_id=IntentIR.new_id(),
+                original_expression=text.strip(),
+                state=IntentState.DISCOVERY,
                 goal="freeze_card",
                 domain="cards",
                 action="freeze",
                 object="credit_card",
-                constraints={"card_id": "CARD-9001"},
+                constraints={},
                 context={"source_text": text.strip()},
                 desired_output="confirmation",
                 authority={"permission": "cards:write"},
-                confidence=0.96,
-                metadata={"compiler": "sandbox-enhanced", "intent_family": "freeze_card"},
+                confidence=0.55,
+                uncertainty={"missing": ["card_id"], "needs_clarification": True},
+                metadata={"compiler": "sandbox-enhanced", "intent_family": "freeze_card", "inference": "keyword-only"},
             )
         elif any(w in lowered for w in ("balance", "ledger", "available")):
             return IntentIR(
                 intent_id=IntentIR.new_id(),
+                original_expression=text.strip(),
+                state=IntentState.DISCOVERY,
                 goal="get_balance",
                 domain="accounts",
                 action="retrieve",
                 object="account_balance",
-                constraints={"account_id": "ACC-1001"},
+                constraints={},
                 context={"source_text": text.strip()},
                 desired_output="balance_summary",
                 authority={"permission": "accounts:read"},
-                confidence=0.94,
-                metadata={"compiler": "sandbox-enhanced", "intent_family": "check_balance"},
+                confidence=0.55,
+                uncertainty={"missing": ["account_id"], "needs_clarification": True},
+                metadata={"compiler": "sandbox-enhanced", "intent_family": "check_balance", "inference": "keyword-only"},
             )
         elif any(w in lowered for w in ("export", "csv", "download transactions")):
             return IntentIR(
                 intent_id=IntentIR.new_id(),
+                original_expression=text.strip(),
+                state=IntentState.DISCOVERY,
                 goal="export_transactions",
                 domain="accounts",
                 action="export",
                 object="transactions",
-                constraints={"months": 6, "account_id": "ACC-1001"},
+                constraints={},
                 context={"source_text": text.strip()},
                 desired_output="csv",
                 authority={"permission": "accounts:read"},
-                confidence=0.92,
-                metadata={"compiler": "sandbox-enhanced", "intent_family": "export_transactions"},
+                confidence=0.55,
+                uncertainty={"missing": ["account_id", "time_range"], "needs_clarification": True},
+                metadata={"compiler": "sandbox-enhanced", "intent_family": "export_transactions", "inference": "keyword-only"},
             )
         else:
             return IntentIR(
                 intent_id=IntentIR.new_id(),
+                original_expression=text.strip(),
+                state=IntentState.UNCLEAR,
                 goal="general_banking_inquiry",
                 domain="banking",
                 action="inquire",
@@ -480,8 +496,9 @@ def _compile_intent(text: str, strict: bool = False) -> IntentIR:
                 constraints={},
                 context={"source_text": text.strip()},
                 desired_output="response",
-                confidence=0.80,
-                metadata={"compiler": "sandbox-fallback", "intent_family": "general_inquiry"},
+                confidence=0.20,
+                uncertainty={"missing": ["objective"], "needs_clarification": True},
+                metadata={"compiler": "sandbox-fallback", "intent_family": "general_inquiry", "inference": "keyword-only"},
             )
 
 
@@ -867,11 +884,13 @@ def _handle_execute(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
         )
 
         try:
-            results = _RECIPE_STORE.execute(
-                target_recipe_id,
+            execution = _RUNNER.run(
+                recipe,
+                params=args,
                 executor=_bank_executor,
                 trace_id=trace_id,
             )
+            results = execution.results
         except Exception as exc:  # noqa: BLE001
             _BUS.emit(
                 EventType.EXECUTION_FAILED,

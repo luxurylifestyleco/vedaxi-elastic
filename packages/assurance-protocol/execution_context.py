@@ -27,6 +27,7 @@ class AuthKind(str, Enum):
     SUPABASE_BEARER = "supabase_bearer"
     ORGANIZATION_API_KEY = "organization_api_key"
     DELEGATED = "delegated"
+    CHAT_SESSION = "chat_session"
 
 
 class ExecutionContext(BaseModel):
@@ -64,3 +65,52 @@ class ExecutionContext(BaseModel):
         if self.expires_at <= datetime.now(timezone.utc):
             raise ValueError("execution context is expired")
         return self
+
+
+class ChatSession(BaseModel):
+    """Provider-neutral, authenticated and consented chat execution boundary."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+    session_id: Text
+    tenant_id: Text
+    principal_id: Text
+    principal_kind: PrincipalKind
+    authenticated_at: AwareDatetime | None = None
+    consent_id: Text | None = None
+    consented_scopes: tuple[Text, ...] = ()
+    scopes: tuple[Text, ...]
+    issued_at: AwareDatetime
+    expires_at: AwareDatetime
+    revoked_at: AwareDatetime | None = None
+    policy_epoch: int = 1
+    authorization_decision_id: Text
+
+    @model_validator(mode="after")
+    def validate_contract(self) -> "ChatSession":
+        if self.expires_at <= self.issued_at:
+            raise ValueError("expires_at must follow issued_at")
+        if self.policy_epoch <= 0:
+            raise ValueError("policy_epoch must be positive")
+        if self.revoked_at is not None and self.revoked_at < self.issued_at:
+            raise ValueError("revoked_at must follow issued_at")
+        if self.consent_id and not set(self.scopes).issubset(self.consented_scopes):
+            raise ValueError("session scopes must be covered by consent")
+        return self
+
+    def to_execution_context(self) -> ExecutionContext:
+        """Project an authorized session into the existing runtime contract."""
+
+        return ExecutionContext(
+            tenant_id=self.tenant_id,
+            principal_id=self.principal_id,
+            principal_kind=self.principal_kind,
+            auth_kind=AuthKind.CHAT_SESSION,
+            organization_id=self.tenant_id,
+            policy_epoch=self.policy_epoch,
+            scopes=self.scopes,
+            issued_at=self.issued_at,
+            expires_at=self.expires_at,
+            revocation_reference=self.session_id,
+            authorization_decision_id=self.authorization_decision_id,
+        )

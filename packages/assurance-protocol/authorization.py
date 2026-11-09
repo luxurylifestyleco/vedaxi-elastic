@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from typing import Sequence
 
 try:  # Supports package imports and the repository's direct test imports.
-    from .execution_context import AuthKind, ExecutionContext
+    from .execution_context import AuthKind, ChatSession, ExecutionContext
     from .outcome import Delegation
 except ImportError:  # pragma: no cover - exercised by direct pytest collection
-    from execution_context import AuthKind, ExecutionContext
+    from execution_context import AuthKind, ChatSession, ExecutionContext
     from outcome import Delegation
 
 
@@ -29,6 +29,37 @@ class AuthorizationDecision:
     reason: str
     authorization_decision_id: str
     delegation_id: str | None = None
+
+
+def authorize_chat_session(
+    session: ChatSession,
+    *,
+    tenant_id: str,
+    principal_id: str,
+    requested_scopes: Sequence[str],
+    now: datetime | None = None,
+) -> AuthorizationDecision:
+    """Authorize a chat request without authenticating or resolving identity."""
+
+    moment = now or datetime.now(timezone.utc)
+    if session.authenticated_at is None:
+        return _deny_session(session, "chat session is not authenticated")
+    if not session.consent_id or not session.consented_scopes:
+        return _deny_session(session, "chat session requires explicit consent")
+    if session.tenant_id != tenant_id:
+        return _deny_session(session, "chat session tenant does not match request")
+    if session.principal_id != principal_id:
+        return _deny_session(session, "chat session principal does not match request")
+    if moment < session.issued_at or moment >= session.expires_at:
+        return _deny_session(session, "chat session is outside its validity window")
+    if session.revoked_at is not None and moment >= session.revoked_at:
+        return _deny_session(session, "chat session is revoked")
+    requested = set(requested_scopes)
+    if not requested or not requested.issubset(session.scopes):
+        return _deny_session(session, "requested scopes exceed chat session scopes")
+    if not requested.issubset(session.consented_scopes):
+        return _deny_session(session, "requested scopes exceed consented scopes")
+    return AuthorizationDecision(True, "chat session authorized", session.authorization_decision_id)
 
 
 def authorize(
@@ -125,6 +156,14 @@ def _deny(context: ExecutionContext, reason: str) -> AuthorizationDecision:
         reason=reason,
         authorization_decision_id=context.authorization_decision_id,
         delegation_id=context.delegation_id,
+    )
+
+
+def _deny_session(session: ChatSession, reason: str) -> AuthorizationDecision:
+    return AuthorizationDecision(
+        allowed=False,
+        reason=reason,
+        authorization_decision_id=session.authorization_decision_id,
     )
 
 

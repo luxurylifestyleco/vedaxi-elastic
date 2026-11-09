@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 import time
 from abc import ABC, abstractmethod
-from typing import Iterable, List, Tuple
+from typing import Any, Iterable, List, Mapping, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -117,6 +117,56 @@ def _capability_text(cap: Capability) -> str:
     return " ".join([cap.id, cap.name, cap.description, cap.domain])
 
 
+def _required_inputs(capability: Capability) -> set[str]:
+    """Return required input names from the local capability shapes."""
+    inputs = capability.inputs
+    if isinstance(inputs.get("required"), list):
+        properties = inputs.get("properties", {})
+        if isinstance(properties, Mapping):
+            return {str(name) for name in inputs["required"] if name in properties}
+    return {
+        str(name)
+        for name, spec in inputs.items()
+        if isinstance(spec, Mapping) and spec.get("required") is True
+    }
+
+
+def _present_intent_inputs(intent: IntentIR) -> set[str]:
+    values: dict[str, Any] = {**intent.constraints, **intent.context}
+    return {name for name, value in values.items() if value is not None and value != ""}
+
+
+def _explicit_permissions(intent: IntentIR) -> set[str] | None:
+    for key in ("permissions", "permission"):
+        value = intent.authority.get(key)
+        if isinstance(value, str):
+            return {value}
+        if isinstance(value, list):
+            return {str(item) for item in value}
+    return None
+
+
+def _explicit_protocols(intent: IntentIR) -> set[str] | None:
+    for source in (intent.context, intent.metadata):
+        value = source.get("protocols", source.get("protocol"))
+        if isinstance(value, str):
+            return {value.lower()}
+        if isinstance(value, list):
+            return {str(item).lower() for item in value}
+    return None
+
+
+def is_suitable(capability: Capability, intent: IntentIR) -> bool:
+    """Apply explicit hard constraints before a capability is ranked."""
+    if not _required_inputs(capability).issubset(_present_intent_inputs(intent)):
+        return False
+    permissions = _explicit_permissions(intent)
+    if permissions is not None and not set(capability.permissions).issubset(permissions):
+        return False
+    protocols = _explicit_protocols(intent)
+    return protocols is None or capability.protocol.lower() in protocols
+
+
 # ---------------------------------------------------------------------------
 # Retrieval interface
 # ---------------------------------------------------------------------------
@@ -154,7 +204,10 @@ class CapabilityRetriever(ABC):
         if k < 0:
             raise ValueError("k must be non-negative")
         start = time.perf_counter()
-        scored: List[Tuple[str, float]] = self._score(intent)
+        eligible = {cap.id for cap in self._capabilities if is_suitable(cap, intent)}
+        scored: List[Tuple[str, float]] = [
+            item for item in self._score(intent) if item[0] in eligible
+        ]
         latency_ms = (time.perf_counter() - start) * 1000.0
 
         scored.sort(key=lambda item: item[1], reverse=True)

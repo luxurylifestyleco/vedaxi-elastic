@@ -48,5 +48,10 @@ class ExecutionEvent(BaseModel):
     event_type: EventType
     trace_id: str
     intent_id: Optional[str] = None
+    task_id: Optional[str] = None
+    context_id: Optional[str] = None
+    outcome_id: Optional[str] = None
+    evidence_id: Optional[str] = None
+    verification_id: Optional[str] = None
     timestamp: float = Field(default_factory=time.time)
     payload: Dict[str, Any] = Field(default_factory=dict)

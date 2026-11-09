@@ -11,6 +11,7 @@ from enum import Enum
 from dataclasses import dataclass
 import hashlib
 import hmac
+import json
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -79,10 +80,19 @@ def canonical_receipt_digest(receipt: ProviderReceipt) -> str:
     provider-specific digest and signature policy.
     """
 
-    output_digest = receipt.output_digest or ""
-    return (
-        f"receipt:{receipt.provider_id}|{receipt.operation_key}|"
-        f"{receipt.provider_operation_id}|{receipt.state.value}|{output_digest}"
+    return json.dumps(
+        {
+            "issuer_id": receipt.issuer_id,
+            "operation_key": receipt.operation_key,
+            "output_digest": receipt.output_digest,
+            "provider_id": receipt.provider_id,
+            "provider_operation_id": receipt.provider_operation_id,
+            "request_digest": receipt.request_digest,
+            "state": receipt.state.value,
+            "detail": receipt.detail,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
     )
 
 
@@ -258,12 +268,13 @@ class FakeProvider:
             raise ValueError("request provider_id does not match fake provider")
         previous = self._operations.get(request.operation.operation_key)
         if previous is not None:
-            return previous.model_copy(
+            duplicate = previous.model_copy(
                 update={
                     "state": ProviderOperationState.DUPLICATE,
                     "detail": "operation key already executed",
                 }
             )
+            return duplicate.model_copy(update={"receipt_digest": canonical_receipt_digest(duplicate)})
         receipt = ProviderReceipt(
             provider_id=self.provider_id,
             issuer_id=self.provider_id,
@@ -272,31 +283,26 @@ class FakeProvider:
             request_digest=request.operation.request_digest,
             state=ProviderOperationState.SUCCEEDED,
             output_digest=f"output:{request.input_digest}",
-            receipt_digest=(
-                f"receipt:{self.provider_id}|{request.operation.operation_key}|"
-                f"{self.provider_id}:{request.operation.operation_key}|SUCCEEDED|"
-                f"output:{request.input_digest}"
-            ),
+            receipt_digest="pending",
             detail="deterministic fake success",
         )
+        receipt = receipt.model_copy(update={"receipt_digest": canonical_receipt_digest(receipt)})
         self._operations[request.operation.operation_key] = receipt
         return receipt
 
     def timeout(self, request: ProviderExecutionRequest) -> ProviderReceipt:
         """Return unknown state without recording a terminal success."""
-        return ProviderReceipt(
+        receipt = ProviderReceipt(
             provider_id=self.provider_id,
             issuer_id=self.provider_id,
             operation_key=request.operation.operation_key,
             provider_operation_id=f"{self.provider_id}:{request.operation.operation_key}",
             request_digest=request.operation.request_digest,
             state=ProviderOperationState.UNKNOWN,
-            receipt_digest=(
-                f"receipt:{self.provider_id}|{request.operation.operation_key}|"
-                f"{self.provider_id}:{request.operation.operation_key}|UNKNOWN|"
-            ),
+            receipt_digest="pending",
             detail="provider state is unknown after timeout",
         )
+        return receipt.model_copy(update={"receipt_digest": canonical_receipt_digest(receipt)})
 
     def conflicting_receipts(self, request: ProviderExecutionRequest) -> tuple[ProviderReceipt, ProviderReceipt]:
         """Return two incompatible receipts for reconciliation tests."""
@@ -307,22 +313,15 @@ class FakeProvider:
             provider_operation_id=f"{self.provider_id}:{request.operation.operation_key}",
             request_digest=request.operation.request_digest,
         )
+        first = ProviderReceipt(
+            **base, state=ProviderOperationState.SUCCEEDED,
+            output_digest="output:a", receipt_digest="pending", detail="success view",
+        )
+        second = ProviderReceipt(
+            **base, state=ProviderOperationState.FAILED,
+            receipt_digest="pending", detail="failure view",
+        )
         return (
-            ProviderReceipt(
-                **base, state=ProviderOperationState.SUCCEEDED,
-                output_digest="output:a",
-                receipt_digest=(
-                    f"receipt:{self.provider_id}|{request.operation.operation_key}|"
-                    f"{self.provider_id}:{request.operation.operation_key}|SUCCEEDED|output:a"
-                ),
-                detail="success view",
-            ),
-            ProviderReceipt(
-                **base, state=ProviderOperationState.FAILED,
-                receipt_digest=(
-                    f"receipt:{self.provider_id}|{request.operation.operation_key}|"
-                    f"{self.provider_id}:{request.operation.operation_key}|FAILED|"
-                ),
-                detail="failure view",
-            ),
+            first.model_copy(update={"receipt_digest": canonical_receipt_digest(first)}),
+            second.model_copy(update={"receipt_digest": canonical_receipt_digest(second)}),
         )

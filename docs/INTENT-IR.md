@@ -1,6 +1,6 @@
 # Intent IR (Intent Intermediate Representation)
 
-The Intent IR is the structured, schema-validated description of a user's intent. It is the data contract produced by a compiler (rule-based or LLM) and consumed by downstream capability routing. It is the first stage of the Elastic pipeline and the foundation for minimizing intelligence cost: a well-structured intent lets retrieval and recipes do the work instead of a model.
+The Intent IR is the structured, schema-validated description of a user's intent. It is the data contract produced by a compiler (rule-based or LLM) and consumed by downstream capability routing. It preserves the original expression separately from interpreted fields so unresolved information is not silently promoted to fact.
 
 ## Files
 
@@ -19,17 +19,23 @@ The Intent IR is the structured, schema-validated description of a user's intent
 | Field | Type | Description |
 |---|---|---|
 | `intent_id` | `str` | Stable unique identifier for this intent instance. |
+| `schema_version` | `Literal["1.1"]` | IntentIR contract version. Unsupported versions are rejected. |
+| `original_expression` | `str \| None` | Original human or machine expression, preserved without interpretation. |
+| `state` | `IntentState` | `UNCLEAR`, `DISCOVERY`, `FORMED`, `EXECUTING`, `FULFILLED`, `FAILED`, or `CANCELLED`. |
 | `goal` | `str` | Canonical goal the user wants to achieve (e.g. `retrieve_financial_document`). |
 | `domain` | `str` | Functional domain the intent belongs to (e.g. `banking`). |
 | `action` | `str` | Verb describing the operation (e.g. `retrieve`). |
 | `object` | `str` | The entity the action applies to (e.g. `account_statement`). |
 | `constraints` | `Dict[str, Any]` | Structured constraints narrowing the intent (e.g. `period`). Default `{}`. |
+| `preferences` | `Dict[str, Any]` | Non-mandatory preferences used to rank suitable paths. Default `{}`. |
 | `context` | `Dict[str, Any]` | Ambient context informing execution (channel, session, source text). Default `{}`. |
 | `desired_output` | `str` | Requested output format or artifact (e.g. `pdf`, `json`). |
 | `authority` | `Dict[str, Any]` | Authorization/entitlement requirements. Default `{}`. |
 | `disclosure` | `Dict[str, Any]` | Data-disclosure and privacy requirements. Default `{}`. |
 | `success_conditions` | `List[str]` | Explicit conditions for the intent to be considered fulfilled. Default `[]`. |
 | `confidence` | `float` | Compiler confidence in the parsed intent, 0.0–1.0. Default `1.0`. |
+| `uncertainty` | `Dict[str, Any]` | Unresolved fields, ambiguity, or clarification requirements. Default `{}`. |
+| `fulfillment` | `Dict[str, Any]` | Result and assurance state; execution success alone is not fulfillment proof. Default `{}`. |
 | `metadata` | `Dict[str, Any]` | Free-form metadata (compiler version, timestamps, provenance). Default `{}`. |
 
 `IntentIR.new_id()` generates a fresh `intent_id` (UUID4 hex).
@@ -44,13 +50,17 @@ An intent is decomposed into the routing-relevant dimensions that downstream lay
 - **object** — the entity the action applies to (e.g. `account_statement`, `invoice`).
 - **desired_output** — the requested artifact (e.g. `pdf`).
 - **context** — ambient information that informs execution but does not narrow the intent.
-- **constraints** — structured narrowing (e.g. `{"period": "2026-08"}`).
+- **constraints** - mandatory narrowing (e.g. `{"period": "2026-08"}`).
+- **preferences** - non-mandatory ranking signals kept separate from constraints.
+- **uncertainty** - explicit missing information and clarification needs.
 
 Retrieval concatenates `goal`, `domain`, `action`, `object`, and `desired_output` into a searchable blob (`_intent_text` in `retriever.py`), so these five fields are the routing surface.
 
 ## The JSON schema
 
-`schema.json` is the language-neutral, canonical definition of the IR. It is a draft 2020-12 schema with `additionalProperties: false` and all 13 fields required. It mirrors the Pydantic model field-for-field, including the `confidence` bounds (0.0–1.0) and the `success_conditions` array of strings. This is the contract a non-Python consumer (or a future LLM compiler emitting JSON) must satisfy.
+`schema.json` is the language-neutral, canonical definition of the IR. It is a draft 2020-12 schema with `additionalProperties: false`. The original routing fields remain required for compatibility; the v1.1 provenance, lifecycle, uncertainty, preference, and fulfillment fields are additive with defaults. This is the contract a non-Python consumer (or a future LLM compiler emitting JSON) must satisfy.
+
+The current boundary accepts only `schema_version: "1.1"`; producers must negotiate a newer contract before sending another version.
 
 ## The compiler
 

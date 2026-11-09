@@ -6,7 +6,7 @@ execution structure:
 - ``create``: store a new recipe.
 - ``version``: create a new version of an existing recipe.
 - ``retrieve``: fetch a recipe (optionally a specific version).
-- ``execute``: run a recipe's steps in dependency (DAG) order.
+- ``execute``: compatibility wrapper for the runtime DAG runner.
 - ``deprecate``: mark a recipe deprecated.
 - ``retire``: mark a recipe retired.
 
@@ -16,14 +16,14 @@ execution.failed). Telemetry is local-only: the store never sends data to an
 external sink. If no bus is supplied, a private in-memory bus is created so
 events remain locally inspectable.
 
-This module implements recipe STORAGE and EXECUTION STRUCTURE only. Automatic
+This module implements recipe storage only. Execution is delegated to
+``RecipeDAGRunner`` so the runtime has one execution authority. Automatic
 recipe creation and optimization are out of scope.
 """
 
 from __future__ import annotations
 
-import time
-import uuid
+import re
 from typing import Any, Callable, Dict, List, Optional
 
 from recipe import Recipe, RecipeStatus, RecipeStep
@@ -31,6 +31,50 @@ from recipe import Recipe, RecipeStatus, RecipeStep
 # An executor is any callable that runs a step's capability and returns a
 # result. It receives the capability_id and the step's args.
 Executor = Callable[[str, Dict[str, Any]], Any]
+
+_SEMVER = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-((?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
+
+
+def _compare_versions(left: str, right: str) -> int:
+    """Compare SemVer values with a deterministic legacy fallback.
+
+    Valid SemVer values sort above legacy values; two legacy values retain
+    lexical ordering. This makes mixed-version resolution a total order.
+    """
+    left_match = _SEMVER.fullmatch(left)
+    right_match = _SEMVER.fullmatch(right)
+    if left_match is None or right_match is None:
+        if left_match is not None or right_match is not None:
+            return 1 if left_match is not None else -1
+        return (left > right) - (left < right)
+
+    left_parts = left_match.groups()
+    right_parts = right_match.groups()
+    release = tuple(map(int, left_parts[:3]))
+    other_release = tuple(map(int, right_parts[:3]))
+    if release != other_release:
+        return (release > other_release) - (release < other_release)
+
+    left_pre = left_parts[3]
+    right_pre = right_parts[3]
+    if left_pre is None or right_pre is None:
+        return (left_pre is None) - (right_pre is None)
+    for left_id, right_id in zip(left_pre.split("."), right_pre.split(".")):
+        if left_id == right_id:
+            continue
+        if left_id.isdigit() and right_id.isdigit():
+            return (int(left_id) > int(right_id)) - (int(left_id) < int(right_id))
+        if left_id.isdigit() != right_id.isdigit():
+            return -1 if left_id.isdigit() else 1
+        return (left_id > right_id) - (left_id < right_id)
+    return (len(left_pre.split(".")) > len(right_pre.split("."))) - (
+        len(left_pre.split(".")) < len(right_pre.split("."))
+    )
 
 
 class RecipeStore:
@@ -132,10 +176,10 @@ class RecipeStore:
     def resolve(self, intent_family: str) -> Optional[Recipe]:
         """Resolve the latest active recipe for an intent family.
 
-        Returns the recipe with the greatest version string whose
+        Returns the recipe with the greatest semantic version whose
         ``intent_family`` matches and whose status is not ``RETIRED``, or
-        ``None`` if absent. Existing lexical version ordering is preserved;
-        this helper does not perform semantic-version parsing or promotion.
+        ``None`` if absent. Values that are not valid semantic versions retain
+        the previous lexical comparison behavior.
         """
         best: Optional[Recipe] = None
         for versions in self._recipes.values():
@@ -144,7 +188,7 @@ class RecipeStore:
                     continue
                 if recipe.status == RecipeStatus.RETIRED:
                     continue
-                if best is None or recipe.version > best.version:
+                if best is None or _compare_versions(recipe.version, best.version) > 0:
                     best = recipe
         return best
 
@@ -196,12 +240,11 @@ class RecipeStore:
         intent_id: Optional[str] = None,
         version: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Execute a recipe's steps in dependency (DAG) order.
+        """Compatibility wrapper for :class:`RecipeDAGRunner`.
 
-        Steps are run in topological order: a step runs only after all of its
-        dependencies have completed. Each step is dispatched to ``executor``
-        (or a default no-op executor that records the call) and telemetry
-        events are emitted on the store's bus.
+        The legacy method returns only the step-result mapping. New callers
+        should use ``RecipeDAGRunner.run`` and consume its full
+        ``ExecutionResult``.
 
         Args:
             recipe_id: The id of the recipe to execute.
@@ -221,81 +264,20 @@ class RecipeStore:
         recipe = self.retrieve(recipe_id, version=version)
         if recipe is None:
             raise KeyError(f"recipe not found: {recipe_id}")
-        if recipe.status == RecipeStatus.RETIRED:
-            raise ValueError(f"recipe is retired: {recipe_id}")
 
-        trace_id = trace_id or uuid.uuid4().hex
-        executor = executor or self._default_executor
-        order = recipe.topological_order()
-        step_by_id = {s.step_id: s for s in recipe.steps}
-
-        self.bus.emit(
-            "recipe.started",
-            trace_id=trace_id,
-            intent_id=intent_id,
-            payload={
-                "recipe_id": recipe.recipe_id,
-                "recipe_version": recipe.version,
-            },
-        )
-
-        results: Dict[str, Any] = {}
+        # Local import avoids a recipe-schema -> recipe-runtime import cycle.
         try:
-            for step_id in order:
-                step = step_by_id[step_id]
-                self.bus.emit(
-                    "recipe.step.started",
-                    trace_id=trace_id,
-                    intent_id=intent_id,
-                    payload={
-                        "recipe_id": recipe.recipe_id,
-                        "step_id": step.step_id,
-                        "capability_id": step.capability_id,
-                    },
-                )
-                self.bus.emit(
-                    "tool.called",
-                    trace_id=trace_id,
-                    intent_id=intent_id,
-                    payload={
-                        "tool": step.capability_id,
-                        "args": step.args,
-                    },
-                )
-                result = executor(step.capability_id, step.args)
-                results[step.step_id] = result
-                self.bus.emit(
-                    "tool.completed",
-                    trace_id=trace_id,
-                    intent_id=intent_id,
-                    payload={
-                        "tool": step.capability_id,
-                        "status": "completed",
-                    },
-                )
-        except Exception as exc:  # noqa: BLE001 - record any failure
-            self.bus.emit(
-                "execution.failed",
-                trace_id=trace_id,
-                intent_id=intent_id,
-                payload={
-                    "recipe_id": recipe.recipe_id,
-                    "error": f"{type(exc).__name__}: {exc}",
-                },
-            )
-            raise
+            from runner import RecipeDAGRunner  # type: ignore
+        except ImportError:
+            from recipe_runtime.runner import RecipeDAGRunner
 
-        self.bus.emit(
-            "recipe.completed",
+        result = RecipeDAGRunner(executor=executor, bus=self.bus).run(
+            recipe,
+            executor=executor,
             trace_id=trace_id,
             intent_id=intent_id,
-            payload={
-                "recipe_id": recipe.recipe_id,
-                "recipe_version": recipe.version,
-                "steps": order,
-            },
         )
-        return results
+        return result.results
 
     # ------------------------------------------------------------------
     # Helpers

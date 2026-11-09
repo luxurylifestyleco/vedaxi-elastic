@@ -363,6 +363,14 @@ class DatabaseTelemetryRecorder:
         # Ensure trace row exists
         trace_db_id = self._ensure_trace(event)
 
+        # Terminal telemetry is immutable; late events must not rewrite the
+        # authoritative terminal status or its output/error.
+        trace = self._fetchone(
+            "SELECT status FROM execution_traces WHERE trace_id = %s", (trace_id,)
+        )
+        if trace is not None and trace["status"] in {"succeeded", "failed"}:
+            return
+
         # Dispatch based on event type
         if event.event_type == EventType.INTENT_RECEIVED:
             self._handle_intent_received(trace_id, event)

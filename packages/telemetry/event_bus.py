@@ -40,6 +40,11 @@ class EventBus:
         event_type: EventType,
         trace_id: str,
         intent_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        context_id: Optional[str] = None,
+        outcome_id: Optional[str] = None,
+        evidence_id: Optional[str] = None,
+        verification_id: Optional[str] = None,
         payload: Optional[Dict[str, Any]] = None,
         timestamp: Optional[float] = None,
     ) -> ExecutionEvent:
@@ -51,6 +56,11 @@ class EventBus:
             event_type=event_type,
             trace_id=trace_id,
             intent_id=intent_id,
+            task_id=task_id,
+            context_id=context_id,
+            outcome_id=outcome_id,
+            evidence_id=evidence_id,
+            verification_id=verification_id,
             timestamp=timestamp if timestamp is not None else time.time(),
             payload=payload or {},
         )

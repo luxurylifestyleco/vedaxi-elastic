@@ -15,7 +15,7 @@ from registry import CapabilityRegistry
 from seed import build_seed_capabilities, seed_registry
 
 from factory import build_retriever, available_strategies
-from retriever import CapabilityCandidate, CapabilityRetriever
+from retriever import CapabilityCandidate, CapabilityRetriever, is_suitable
 from strategies import (
     KeywordRetriever,
     SemanticRouterRetriever,
@@ -166,6 +166,51 @@ def test_negative_k_raises(capabilities, statement_intent):
     retriever = KeywordRetriever(capabilities)
     with pytest.raises(ValueError):
         retriever.retrieve(statement_intent, k=-1)
+
+
+def test_hard_constraints_filter_before_ranking():
+    capabilities = [
+        Capability(
+            id="best-but-ineligible", name="Best", description="statement", domain="documents",
+            inputs={"account_id": {"type": "string", "required": True}},
+            permissions=["documents:read"], protocol="rest",
+        ),
+        Capability(
+            id="eligible", name="Eligible", description="statement", domain="documents",
+            inputs={"account_id": {"type": "string", "required": True}},
+            permissions=["documents:read"], protocol="rest",
+        ),
+    ]
+    intent = IntentIR(
+        intent_id="hard-constraints", goal="statement", domain="documents", action="retrieve",
+        object="statement", constraints={"account_id": "acct-1"},
+        authority={"permission": "documents:read"}, context={"protocol": "rest"},
+        desired_output="pdf",
+    )
+    assert [c.capability_id for c in KeywordRetriever(capabilities).retrieve(intent)] == [
+        "best-but-ineligible", "eligible"
+    ]
+    missing_input = intent.model_copy(update={"constraints": {}})
+    assert not is_suitable(capabilities[0], missing_input)
+    assert KeywordRetriever(capabilities).retrieve(missing_input) == []
+
+
+def test_permission_and_protocol_mismatch_are_excluded():
+    capability = Capability(
+        id="protected", name="Protected", description="statement", domain="documents",
+        permissions=["documents:write"], protocol="mcp",
+    )
+    base = IntentIR(
+        intent_id="mismatch", goal="statement", domain="documents", action="retrieve",
+        object="statement", desired_output="pdf",
+    )
+    permission_mismatch = base.model_copy(update={"authority": {"permission": "documents:read"}})
+    protocol_mismatch = base.model_copy(update={"context": {"protocol": "rest"}})
+    assert not is_suitable(capability, permission_mismatch)
+    assert not is_suitable(capability, protocol_mismatch)
+    retriever = KeywordRetriever([capability])
+    assert retriever.retrieve(permission_mismatch) == []
+    assert retriever.retrieve(protocol_mismatch) == []
 
 
 # ---------------------------------------------------------------------------

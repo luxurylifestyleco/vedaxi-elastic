@@ -120,6 +120,7 @@ class RuleBasedCompiler(IntentCompiler):
             if pattern.search(lowered):
                 return IntentIR(
                     intent_id=IntentIR.new_id(),
+                    original_expression=text.strip(),
                     goal=goal,
                     domain=domain,
                     action=action,
@@ -143,6 +144,7 @@ class RuleBasedCompiler(IntentCompiler):
                     constraints["period"] = period
                 return IntentIR(
                     intent_id=IntentIR.new_id(),
+                    original_expression=text.strip(),
                     goal=goal,
                     domain=domain,
                     action=action,

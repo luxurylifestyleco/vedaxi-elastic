@@ -22,6 +22,14 @@ _dashboard_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_dashboard_mod)
 create_app = _dashboard_mod.create_app
 
+
+def test_keyword_fallback_preserves_unknown_values_as_uncertainty():
+    intent = _dashboard_mod._compile_intent("Please pay my bill", strict=False)
+    assert intent.state.value == "DISCOVERY"
+    assert intent.original_expression == "Please pay my bill"
+    assert intent.constraints == {}
+    assert intent.uncertainty["missing"] == ["payee", "amount"]
+
 # Ensure we never leak 'app' into sys.modules
 sys.modules.pop("app", None)
 

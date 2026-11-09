@@ -46,6 +46,9 @@ if _PACKAGES_DIR not in sys.path:
 _RECIPE_SCHEMA_DIR = os.path.join(_PACKAGES_DIR, "recipe-schema")
 if _RECIPE_SCHEMA_DIR not in sys.path:
     sys.path.insert(0, _RECIPE_SCHEMA_DIR)
+_RECIPE_RUNTIME_DIR = os.path.join(_PACKAGES_DIR, "recipe-runtime")
+if _RECIPE_RUNTIME_DIR not in sys.path:
+    sys.path.insert(0, _RECIPE_RUNTIME_DIR)
 
 _APP_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "apps", "demo-bank"
@@ -54,6 +57,7 @@ if _APP_DIR not in sys.path:
     sys.path.insert(0, _APP_DIR)
 
 from recipe import Recipe, RecipeStatus, RecipeStep  # noqa: E402
+from runner import RecipeDAGRunner  # noqa: E402
 from store import RecipeStore  # noqa: E402
 
 import bank  # noqa: E402
@@ -373,13 +377,12 @@ class ControlC:
         metrics["tool_calls"] = len(merged_recipe.steps)
 
         try:
-            results = self.store.execute(
-                merged_recipe.recipe_id,
+            results = RecipeDAGRunner().run(
+                recipe,
                 executor=_bank_executor,
                 trace_id=uuid.uuid4().hex,
                 intent_id=str(intent),
-                version=merged_recipe.version,
-            )
+            ).results
             metrics["success"] = True
         except Exception as exc:  # noqa: BLE001 - record any failure
             metrics["success"] = False

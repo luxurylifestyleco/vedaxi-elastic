@@ -73,6 +73,8 @@ class Delegation(Contract):
 
 class OutcomeEnvelope(Contract):
     outcome_id: Text
+    intent_id: Text | None = None
+    trace_id: Text | None = None
     principal_id: Text
     originating_agent_id: Text
     delegated_authority_reference: Text | None = None

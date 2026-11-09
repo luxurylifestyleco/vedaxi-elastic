@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+from itertools import permutations
 
 import pytest
 
@@ -140,6 +141,42 @@ def test_resolve_preserves_foundation_family_version_and_retirement_contract():
     store.create(retired)
     assert store.resolve("retrieve_financial_document") is newer
     assert store.resolve("different_family") is None
+
+
+def test_resolve_orders_semantic_versions_not_lexically():
+    store = RecipeStore()
+    store.create(_make_recipe("v2", "2.0.0"))
+    store.create(_make_recipe("v10", "10.0.0"))
+
+    assert store.resolve("retrieve_financial_document").recipe_id == "v10"
+
+
+def test_resolve_applies_semver_prerelease_precedence():
+    store = RecipeStore()
+    store.create(_make_recipe("release", "1.0.0"))
+    store.create(_make_recipe("candidate", "1.0.0-rc.1"))
+
+    assert store.resolve("retrieve_financial_document").recipe_id == "release"
+
+
+def test_resolve_mixed_legacy_and_semver_is_insertion_order_independent():
+    versions = ["2.0.0", "10.0.0", "11"]
+    winners = set()
+    for ordering in permutations(versions):
+        store = RecipeStore()
+        for version in ordering:
+            store.create(_make_recipe(version=version))
+        winners.add(store.resolve("retrieve_financial_document").version)
+
+    assert winners == {"10.0.0"}
+
+
+def test_resolve_treats_numeric_prerelease_leading_zero_as_legacy():
+    store = RecipeStore()
+    store.create(_make_recipe("stable", "1.0.0"))
+    store.create(_make_recipe("legacy", "1.0.0-01"))
+
+    assert store.resolve("retrieve_financial_document").recipe_id == "stable"
 
 
 def test_recipe_roundtrip():

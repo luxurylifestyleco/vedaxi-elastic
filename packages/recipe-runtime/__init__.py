@@ -46,13 +46,18 @@ def execute_recipe(
     Returns:
         Dict mapping step_id to step execution result.
     """
-    return store.execute(
-        recipe_id=recipe_id,
+    recipe = store.retrieve(recipe_id, version=version)
+    if recipe is None:
+        raise KeyError(f"recipe not found: {recipe_id}")
+    from .runner import RecipeDAGRunner
+
+    return RecipeDAGRunner(executor=executor, bus=store.bus).run(
+        recipe,
+        params=args,
         executor=executor,
         trace_id=trace_id,
         intent_id=intent_id,
-        version=version,
-    )
+    ).results
 
 
 __all__ = [

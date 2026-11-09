@@ -61,6 +61,11 @@ class TelemetryRecord(BaseModel):
 
     trace_id: str
     intent_id: Optional[str] = None
+    task_id: Optional[str] = None
+    context_id: Optional[str] = None
+    outcome_id: Optional[str] = None
+    evidence_ids: List[str] = Field(default_factory=list)
+    verification_id: Optional[str] = None
     recipe_id: Optional[str] = None
     recipe_version: Optional[str] = None
     capability_ids: List[str] = Field(default_factory=list)
@@ -89,6 +94,7 @@ class TelemetryRecorder:
         self._bus = bus
         self._records: Dict[str, TelemetryRecord] = {}
         self._completed: List[TelemetryRecord] = []
+        self._completed_trace_ids: set[str] = set()
         bus.subscribe(self._on_event)
 
     # -- public API -----------------------------------------------------
@@ -123,16 +129,28 @@ class TelemetryRecorder:
         """Drop all in-progress and completed records."""
         self._records.clear()
         self._completed.clear()
+        self._completed_trace_ids.clear()
 
     # -- event handling -------------------------------------------------
 
     def _on_event(self, event: ExecutionEvent) -> None:
+        # Terminal telemetry is immutable; duplicate or late events must not
+        # create a second completion record for the same execution.
+        if event.trace_id in self._completed_trace_ids:
+            return
         record = self._records.get(event.trace_id)
         if record is None:
             record = TelemetryRecord(trace_id=event.trace_id)
             self._records[event.trace_id] = record
         if record.started_at is None:
             record.started_at = event.timestamp
+
+        for field in ("intent_id", "task_id", "context_id", "outcome_id", "verification_id"):
+            value = getattr(event, field)
+            if value is not None and getattr(record, field) is None:
+                setattr(record, field, value)
+        if event.evidence_id and event.evidence_id not in record.evidence_ids:
+            record.evidence_ids.append(event.evidence_id)
 
         self._apply(event, record)
 
@@ -147,10 +165,23 @@ class TelemetryRecorder:
                     else "failed"
                 )
             self._completed.append(record)
+            self._completed_trace_ids.add(event.trace_id)
             self._records.pop(event.trace_id, None)
 
     def _apply(self, event: ExecutionEvent, record: TelemetryRecord) -> None:
         payload = event.payload or {}
+        for field, aliases in {
+            "task_id": ("task_id", "taskId"),
+            "context_id": ("context_id", "contextId"),
+            "outcome_id": ("outcome_id", "outcomeId"),
+            "verification_id": ("verification_id", "verificationId"),
+        }.items():
+            value = next((payload[key] for key in aliases if payload.get(key) is not None), None)
+            if value is not None and getattr(record, field) is None:
+                setattr(record, field, value)
+        evidence_id = payload.get("evidence_id") or payload.get("evidenceId")
+        if isinstance(evidence_id, str) and evidence_id not in record.evidence_ids:
+            record.evidence_ids.append(evidence_id)
         protocol = payload.get("protocol")
         if isinstance(protocol, dict):
             record.protocol_metadata.update(protocol)

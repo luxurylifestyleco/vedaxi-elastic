@@ -191,6 +191,38 @@ def test_failed_execution_updates_status_and_errors(
     assert steps[0]["status"] == "failed"
 
 
+def test_terminal_trace_ignores_duplicate_and_late_events(
+    bus: EventBus, memory_recorder: DatabaseTelemetryRecorder
+) -> None:
+    trace_id = "trace-terminal-db-1"
+    bus.emit(EventType.INTENT_RECEIVED, trace_id=trace_id, timestamp=210.0)
+    bus.emit(
+        EventType.OUTCOME_DELIVERED,
+        trace_id=trace_id,
+        payload={"output": {"status": "success"}},
+        timestamp=211.0,
+    )
+    bus.emit(
+        EventType.EXECUTION_FAILED,
+        trace_id=trace_id,
+        payload={"error": "late failure"},
+        timestamp=212.0,
+    )
+    bus.emit(
+        EventType.OUTCOME_DELIVERED,
+        trace_id=trace_id,
+        payload={"output": {"status": "different"}},
+        timestamp=213.0,
+    )
+
+    trace = memory_recorder.get_trace(trace_id)
+    assert trace is not None
+    assert trace["status"] == "succeeded"
+    assert trace["output"] == {"status": "success"}
+    assert trace["error"] is None
+    assert trace["finished_at"].endswith("+00:00")
+
+
 def test_failed_tool_step_recorded(
     bus: EventBus, memory_recorder: DatabaseTelemetryRecorder
 ) -> None:

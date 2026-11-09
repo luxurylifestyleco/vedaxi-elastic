@@ -1,3 +1,4 @@
+import pytest
 from pytest import raises
 
 try:
@@ -10,6 +11,7 @@ try:
         ProviderReceipt,
         ReceiptVerificationStatus,
         UnsupportedProviderError,
+        canonical_receipt_digest,
         sign_receipt,
         verify_provider_receipt,
         verify_receipt_signature,
@@ -19,7 +21,7 @@ except ImportError:  # pragma: no cover
     from provider import (
         FakeProvider, LocalTrustRoot, ProviderExecutionRequest, ProviderExecutorRegistry,
         ProviderOperationState, ProviderReceipt, ReceiptVerificationStatus,
-        UnsupportedProviderError, sign_receipt, verify_provider_receipt,
+        UnsupportedProviderError, canonical_receipt_digest, sign_receipt, verify_provider_receipt,
         verify_receipt_signature,
     )
     from recovery import OperationIdentity
@@ -44,6 +46,7 @@ def test_fake_provider_success_is_deterministic_and_replay_is_duplicate():
     assert first.state is ProviderOperationState.SUCCEEDED
     assert replay.state is ProviderOperationState.DUPLICATE
     assert replay.provider_operation_id == first.provider_operation_id
+    assert replay.receipt_digest == canonical_receipt_digest(replay)
 
 
 def test_timeout_is_unknown_and_does_not_claim_failure_or_success():
@@ -188,6 +191,74 @@ def test_signed_receipt_from_matching_issuer_verifies():
 
     assert result.status is ReceiptVerificationStatus.VERIFIED
     assert result.reasons == ()
+
+
+def test_signed_receipt_rejects_request_digest_tampering():
+    receipt = FakeProvider().execute(request())
+    trust_root = LocalTrustRoot(issuer_id=receipt.issuer_id, key=_THROWAWAY_TRUST_KEY)
+    signature = sign_receipt(receipt, trust_root)
+
+    result = verify_receipt_signature(
+        receipt.model_copy(update={"request_digest": "tampered-request"}),
+        signature,
+        trust_root=trust_root,
+    )
+
+    assert result.status is ReceiptVerificationStatus.REJECTED
+    assert result.reasons == ("signature mismatch",)
+
+
+def test_signed_receipt_rejects_issuer_id_tampering():
+    receipt = FakeProvider().execute(request())
+    trust_root = LocalTrustRoot(issuer_id=receipt.issuer_id, key=_THROWAWAY_TRUST_KEY)
+    signature = sign_receipt(receipt, trust_root)
+
+    result = verify_receipt_signature(
+        receipt.model_copy(update={"issuer_id": "tampered-issuer"}),
+        signature,
+        trust_root=trust_root,
+    )
+
+    assert result.status is ReceiptVerificationStatus.REJECTED
+    assert result.reasons == ("issuer not in trust root", "signature mismatch")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("provider_id", "tampered|provider"),
+        ("operation_key", "tampered|operation"),
+        ("provider_operation_id", "tampered|provider-operation"),
+        ("request_digest", "tampered|request"),
+        ("state", ProviderOperationState.FAILED),
+        ("output_digest", "tampered|output"),
+        ("detail", "tampered|detail"),
+    ],
+)
+def test_signed_receipt_rejects_security_field_tampering(field, value):
+    receipt = FakeProvider().execute(request())
+    trust_root = LocalTrustRoot(issuer_id=receipt.issuer_id, key=_THROWAWAY_TRUST_KEY)
+    signature = sign_receipt(receipt, trust_root)
+
+    result = verify_receipt_signature(
+        receipt.model_copy(update={field: value}),
+        signature,
+        trust_root=trust_root,
+    )
+
+    assert result.status is ReceiptVerificationStatus.REJECTED
+    assert result.reasons == ("signature mismatch",)
+
+
+def test_canonical_receipt_payload_preserves_null_empty_and_separator_values():
+    receipt = FakeProvider().execute(request())
+
+    null_output = receipt.model_copy(update={"output_digest": None})
+    empty_output = receipt.model_copy(update={"output_digest": ""})
+    separator_output = receipt.model_copy(update={"output_digest": "a|b,{}"})
+
+    assert canonical_receipt_digest(null_output) != canonical_receipt_digest(empty_output)
+    assert canonical_receipt_digest(empty_output) != canonical_receipt_digest(separator_output)
 
 
 def test_forged_signature_is_rejected_with_signature_mismatch():

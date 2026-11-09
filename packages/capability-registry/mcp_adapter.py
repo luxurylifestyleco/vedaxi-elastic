@@ -40,6 +40,7 @@ from remote_mcp import RemoteMCPClient
 DEFAULT_PROVIDER = "mcp"
 DEFAULT_PROTOCOL = "mcp"
 DEFAULT_DOMAIN = "mcp"
+TRUSTED_SYNTHETIC_REMOTE_PROVIDER = "synthetic-remote-mcp"
 
 
 @dataclass
@@ -63,6 +64,7 @@ class ExecutionResult:
     error: Optional[str] = None
     duration_ms: float = 0.0
     timestamp: float = field(default_factory=time.time)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Return a plain-dict representation of the result."""
@@ -74,6 +76,7 @@ class ExecutionResult:
             "error": self.error,
             "duration_ms": self.duration_ms,
             "timestamp": self.timestamp,
+            "metadata": self.metadata,
         }
 
 
@@ -96,6 +99,7 @@ class MCPAdapter:
         tool_registry: Optional[Sequence[Any]] = None,
         remote_client: Optional[RemoteMCPClient] = None,
         allow_demo_fixtures: bool = True,
+        trusted_remote_provider: bool = False,
         provider: str = DEFAULT_PROVIDER,
         protocol: str = DEFAULT_PROTOCOL,
         domain: str = DEFAULT_DOMAIN,
@@ -108,6 +112,7 @@ class MCPAdapter:
         self._tool_registry = tool_registry
         self.remote_client = remote_client
         self.allow_demo_fixtures = allow_demo_fixtures
+        self.trusted_remote_provider = trusted_remote_provider
         self._tools: Dict[str, Any] = {}
         self._capabilities: Dict[str, Capability] = {}
         self._execution_log: List[ExecutionResult] = []
@@ -140,6 +145,10 @@ class MCPAdapter:
             return list(self._tool_registry)
 
         if self.remote_client is not None:
+            if self.provider != TRUSTED_SYNTHETIC_REMOTE_PROVIDER and not self.trusted_remote_provider:
+                raise PermissionError(
+                    f"remote MCP provider is not trusted: {self.provider}"
+                )
             return self.remote_client.list_tools()
 
         if self.allow_demo_fixtures:
@@ -306,6 +315,13 @@ class MCPAdapter:
             result=value,
             error=error,
             duration_ms=duration_ms,
+            metadata={
+                "source": "remote-mcp" if self.remote_client is not None else "mcp-fixture",
+                "provider": self.provider,
+                "protocol": self.protocol,
+                "endpoint": self.remote_client.endpoint if self.remote_client is not None else None,
+                "trusted": bool(self.remote_client is None or self.remote_client.trusted),
+            },
         )
         self._execution_log.append(result)
         return result

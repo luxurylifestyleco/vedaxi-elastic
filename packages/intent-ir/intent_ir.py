@@ -10,9 +10,22 @@ Uses Pydantic v2.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class IntentState(str, Enum):
+    """Small lifecycle vocabulary for intent formation and execution."""
+
+    UNCLEAR = "UNCLEAR"
+    DISCOVERY = "DISCOVERY"
+    FORMED = "FORMED"
+    EXECUTING = "EXECUTING"
+    FULFILLED = "FULFILLED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
 class IntentIR(BaseModel):
@@ -20,8 +33,25 @@ class IntentIR(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    schema_version: Literal["1.1"] = Field(
+        default="1.1",
+        description="Version of the IntentIR contract.",
+    )
+
     intent_id: str = Field(
         description="Stable unique identifier for this intent instance."
+    )
+    intent_revision: int = Field(
+        default=1, strict=True, ge=1,
+        description="Monotonic revision of this intent, not an authorization grant.",
+    )
+    original_expression: Optional[str] = Field(
+        default=None,
+        description="The original human or machine expression, preserved without interpretation.",
+    )
+    state: IntentState = Field(
+        default=IntentState.FORMED,
+        description="Lifecycle state of the intent representation.",
     )
     goal: str = Field(description="Canonical goal the user wants to achieve.")
     domain: str = Field(description="Functional domain the intent belongs to.")
@@ -30,6 +60,10 @@ class IntentIR(BaseModel):
     constraints: Dict[str, Any] = Field(
         default_factory=dict,
         description="Structured constraints narrowing the intent.",
+    )
+    preferences: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Non-mandatory preferences used to rank otherwise suitable fulfilment paths.",
     )
     context: Dict[str, Any] = Field(
         default_factory=dict,
@@ -55,6 +89,14 @@ class IntentIR(BaseModel):
         ge=0.0,
         le=1.0,
         description="Compiler confidence in the parsed intent, 0.0 to 1.0.",
+    )
+    uncertainty: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Explicit unresolved fields, ambiguity, or clarification requirements.",
+    )
+    fulfillment: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Fulfillment and assurance state; execution success alone is not fulfillment proof.",
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,

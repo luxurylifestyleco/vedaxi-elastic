@@ -75,6 +75,25 @@ def test_health(server):
     assert payload == {"status": "ok"}
 
 
+def test_non_loopback_transport_requires_trusted_auth_adapter():
+    with pytest.raises(RuntimeError, match="trusted authentication adapter"):
+        create_app(host="0.0.0.0")
+
+
+def test_production_transport_requires_trusted_auth_adapter():
+    with pytest.raises(RuntimeError, match="trusted authentication adapter"):
+        create_app(production=True)
+
+
+def test_non_loopback_transport_accepts_explicit_trusted_auth_adapter():
+    class TrustedAuthAdapter:
+        def authenticate(self, headers):
+            return True
+
+    server = create_app(host="0.0.0.0", trusted_auth_adapter=TrustedAuthAdapter())
+    server.server_close()
+
+
 # ---------------------------------------------------------------------------
 # /intent/compile
 # ---------------------------------------------------------------------------

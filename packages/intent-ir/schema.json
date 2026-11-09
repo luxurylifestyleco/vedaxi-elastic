@@ -21,9 +21,31 @@
     "metadata"
   ],
   "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.1"],
+      "default": "1.1",
+      "description": "Version of the IntentIR contract."
+    },
     "intent_id": {
       "type": "string",
       "description": "Stable unique identifier for this intent instance (e.g. a UUID or slug)."
+    },
+    "intent_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Monotonic revision of this intent; never an authorization grant."
+    },
+    "original_expression": {
+      "type": ["string", "null"],
+      "description": "The original human or machine expression, preserved without interpretation."
+    },
+    "state": {
+      "type": "string",
+      "enum": ["UNCLEAR", "DISCOVERY", "FORMED", "EXECUTING", "FULFILLED", "FAILED", "CANCELLED"],
+      "default": "FORMED",
+      "description": "Lifecycle state of the intent representation."
     },
     "goal": {
       "type": "string",
@@ -44,6 +66,11 @@
     "constraints": {
       "type": "object",
       "description": "Structured constraints narrowing the intent (e.g. period, amount, filters).",
+      "additionalProperties": true
+    },
+    "preferences": {
+      "type": "object",
+      "description": "Non-mandatory preferences used to rank otherwise suitable fulfilment paths.",
       "additionalProperties": true
     },
     "context": {
@@ -77,6 +104,16 @@
       "description": "Compiler confidence in the parsed intent, 0.0 (none) to 1.0 (certain).",
       "minimum": 0.0,
       "maximum": 1.0
+    },
+    "uncertainty": {
+      "type": "object",
+      "description": "Explicit unresolved fields, ambiguity, or clarification requirements.",
+      "additionalProperties": true
+    },
+    "fulfillment": {
+      "type": "object",
+      "description": "Fulfillment and assurance state; execution success alone is not fulfillment proof.",
+      "additionalProperties": true
     },
     "metadata": {
       "type": "object",
