@@ -30,6 +30,7 @@ import re
 import sqlite3
 import sys
 import uuid
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import RLock
@@ -97,6 +98,7 @@ from provider import ProviderExecutorRegistry, UnsupportedProviderError  # noqa:
 from verification import VerificationContext, VerificationEngine  # noqa: E402
 from authorization import authorize_chat_session  # noqa: E402
 from execution_context import ChatSession, PrincipalKind  # noqa: E402
+from auth import AuthenticatedPrincipal, SupabaseAuthAdapter  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared application state (wired to the real packages).
@@ -111,6 +113,9 @@ _RUNNER = RecipeDAGRunner(bus=_BUS)
 _VERIFICATION_ENGINE = VerificationEngine()
 _CHAT_DB_PATH = os.environ.get("ELASTIC_CHAT_DB_PATH")
 _CHAT_POSTGRES_DSN = os.environ.get("ELASTIC_CHAT_POSTGRES_DSN")
+_REQUEST_PRINCIPAL: ContextVar[AuthenticatedPrincipal | None] = ContextVar(
+    "elastic_request_principal", default=None
+)
 _A2A_TCK_FIXTURE_ENV = "ELASTIC_A2A_TCK_FIXTURE"
 _A2A_TASKS = (
     PostgresA2ATaskStore(_CHAT_POSTGRES_DSN)
@@ -1078,20 +1083,23 @@ def _chat_session_request(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
         return 400, {"error": "scopes must be a non-empty array of strings"}
     if "tenantId" in body or "principalId" in body:
         return 400, {"error": "tenantId and principalId are server-resolved"}
+    principal = _REQUEST_PRINCIPAL.get()
+    if principal is not None and not set(scopes).issubset(principal.scopes):
+        return 403, {"error": "requested scopes exceed authenticated token scopes"}
     now = datetime.now(timezone.utc)
     session_id = f"chat-{uuid.uuid4().hex}"
     context_id = f"ctx-{uuid.uuid4().hex}"
     session = ChatSession(
         session_id=session_id,
-        tenant_id=_CHAT_DEV_TENANT,
-        principal_id=_CHAT_DEV_PRINCIPAL,
-        principal_kind=_CHAT_DEV_PRINCIPAL_KIND,
+        tenant_id=principal.tenant_id if principal else _CHAT_DEV_TENANT,
+        principal_id=principal.principal_id if principal else _CHAT_DEV_PRINCIPAL,
+        principal_kind=PrincipalKind(principal.principal_kind) if principal else _CHAT_DEV_PRINCIPAL_KIND,
         authenticated_at=now,
         consent_id=consent_id,
         consented_scopes=tuple(scopes),
         scopes=tuple(scopes),
-        issued_at=now,
-        expires_at=datetime.fromtimestamp(now.timestamp() + 3600, tz=timezone.utc),
+        issued_at=principal.issued_at if principal else now,
+        expires_at=principal.expires_at if principal else datetime.fromtimestamp(now.timestamp() + 3600, tz=timezone.utc),
         authorization_decision_id=f"auth-{uuid.uuid4().hex}",
     )
     _CHAT_SESSIONS.put(session, context_id)
@@ -1136,7 +1144,8 @@ def _authorize_chat_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]
     if not isinstance(metadata["sessionId"], str) or not metadata["sessionId"].strip():
         raise ValueError("sessionId must be a non-empty string")
     session_id = metadata["sessionId"]
-    tenant_id = _CHAT_DEV_TENANT
+    principal = _REQUEST_PRINCIPAL.get()
+    tenant_id = principal.tenant_id if principal else _CHAT_DEV_TENANT
     session = _CHAT_SESSIONS.get(session_id, tenant_id=tenant_id)
     if session is None:
         raise ValueError("chat session not found")
@@ -1153,6 +1162,8 @@ def _authorize_chat_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]
     )
     if not decision.allowed:
         raise ValueError(decision.reason)
+    if principal is not None and session.principal_id != principal.principal_id:
+        raise ValueError("chat session is not owned by authenticated principal")
     return {
         "sessionId": session_id,
         "contextId": context_id,
@@ -1170,10 +1181,12 @@ def _authorize_chat_task(task: Dict[str, Any], session_id: Optional[str]) -> boo
         return True  # Preserve the legacy, non-chat A2A lifecycle.
     if session_id != task_session_id:
         return False
-    tenant_id = task_metadata.get("tenantId") or _CHAT_DEV_TENANT
+    principal = _REQUEST_PRINCIPAL.get()
+    tenant_id = task_metadata.get("tenantId") or (principal.tenant_id if principal else _CHAT_DEV_TENANT)
     session = _CHAT_SESSIONS.get(session_id, tenant_id=tenant_id)
     return bool(
         session
+        and (principal is None or session.principal_id == principal.principal_id)
         and _CHAT_SESSIONS.context_owner(task.get("contextId", ""), tenant_id=tenant_id) == session_id
         and authorize_chat_session(
             session,
@@ -1190,8 +1203,10 @@ def _task_tenant_id(session_id: Optional[str], payload: Optional[Dict[str, Any]]
         return metadata["tenantId"]
     if not isinstance(session_id, str) or not session_id:
         return None
+    principal = _REQUEST_PRINCIPAL.get()
+    tenant_id = principal.tenant_id if principal else _CHAT_DEV_TENANT
     try:
-        session = _CHAT_SESSIONS.get(session_id, tenant_id=_CHAT_DEV_TENANT)
+        session = _CHAT_SESSIONS.get(session_id, tenant_id=tenant_id)
     except ValueError:
         return None
     return session.tenant_id if session is not None else None
@@ -1554,6 +1569,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _dispatch(self) -> None:
+        _REQUEST_PRINCIPAL.set(None)
         parsed = urlparse(self.path)
         path = parsed.path
         preloaded_body: Optional[Dict[str, Any]] = None
@@ -1573,6 +1589,12 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 return
             try:
                 authenticated = authenticate(self.headers)
+                resolver = getattr(adapter, "resolve", None)
+                principal = resolver(self.headers) if callable(resolver) else None
+                if callable(resolver) and principal is None:
+                    authenticated = False
+                if isinstance(principal, AuthenticatedPrincipal):
+                    _REQUEST_PRINCIPAL.set(principal)
             except Exception:  # noqa: BLE001 - fail closed at the transport boundary.
                 authenticated = False
             if not authenticated:
@@ -1744,7 +1766,8 @@ def main() -> None:
     host = os.environ.get("GATEWAY_HOST", "127.0.0.1")
     port = int(os.environ.get("GATEWAY_PORT", "8000"))
     production = os.environ.get("GATEWAY_ENV", "development").lower() == "production"
-    server = create_app(host, port, production=production)
+    trusted_auth = SupabaseAuthAdapter.from_env() if production or not _is_loopback_host(host) else None
+    server = create_app(host, port, production=production, trusted_auth_adapter=trusted_auth)
     print(f"Elastic Web gateway listening on http://{host}:{port}")
     try:
         server.serve_forever()

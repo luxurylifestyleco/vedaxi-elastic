@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2",
     "jsonschema>=4",
+    "PyJWT[crypto]>=2.10",
 ]
 
 [project.optional-dependencies]
