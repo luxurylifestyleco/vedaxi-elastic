@@ -1,0 +1,15 @@
+# Elastic Web
+
+> Intent in. The right capability out.
+
+Elastic Web is Vedaxi's open protocol. You state an intent. It returns the capability that can do that intent, not the whole catalog.
+
+Vedaxi is the name. Elastic Web is the product.
+
+- Live view: https://vedaxi.com/elasticweb — demonstration. Does not book, pay, or contact anyone.
+- Source: https://github.com/luxurylifestyleco/vedaxi-elastic
+- Mark: https://vedaxi.com
+
+There is no agent card on vedaxi.com. Read this file and the repository. Do not invent an endpoint.
+
+The research-integrity desk is not Elastic Web.
