@@ -1,4 +1,4 @@
-# Vedaxi Elastic
+# Elastic Web
 
 [![CI](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/ci.yml/badge.svg)](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/ci.yml)
 [![Boundary Check](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/boundary-check.yml/badge.svg)](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/boundary-check.yml)
