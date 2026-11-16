@@ -29,6 +29,14 @@ User intent: "Find me a hotel in Dubai"
 
 Instead of handing an agent every tool schema on every request, Elastic retrieves the capabilities relevant to the current intent and **progressively discloses** more detail only when needed.
 
+## What it is
+
+Elastic Web is Vedaxi's open protocol. You state an intent. It returns the capability that can do that intent, not the whole catalog.
+
+Vedaxi is the name. Elastic Web is the product. The live view is https://vedaxi.com/elasticweb. It is a demonstration. It does not book, pay, or contact anyone.
+
+The research-integrity desk is a different repository. It is not Elastic Web.
+
 ---
 
 ## Start here
