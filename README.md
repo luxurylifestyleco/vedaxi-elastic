@@ -3,7 +3,7 @@
 [![CI](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/ci.yml/badge.svg)](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/ci.yml)
 [![Boundary Check](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/boundary-check.yml/badge.svg)](https://github.com/luxurylifestyleco/vedaxi-elastic/actions/workflows/boundary-check.yml)
 
-The web normally exposes pages and APIs. **Vedaxi Elastic exposes what a service can do.**
+Elastic Web is the product. Intent in. The right capability out. This repository is the open protocol: a service exposes the operation that matches the intent, not the whole catalog.
 
 This repository is the **open foundation** for making services intent-addressable and composable. It is a protocol and toolkit — not an application you install and run as a product.
 
